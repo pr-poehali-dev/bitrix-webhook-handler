@@ -9,6 +9,7 @@ interface CompaniesTableProps {
   selectedCompanies: Set<string>;
   filters: CompanyFilters;
   onToggleCompany: (companyId: string) => void;
+  onToggleAll: () => void;
   onFilterChange: (filters: CompanyFilters) => void;
 }
 
@@ -18,14 +19,27 @@ export default function CompaniesTable({
   selectedCompanies,
   filters,
   onToggleCompany,
+  onToggleAll,
   onFilterChange,
 }: CompaniesTableProps) {
+  const allSelected = filteredCompanies.length > 0 && filteredCompanies.every(c => selectedCompanies.has(c.ID));
+  const someSelected = filteredCompanies.some(c => selectedCompanies.has(c.ID)) && !allSelected;
+
   return (
     <div className="rounded-md border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            {result.bitrix_companies.length > 1 && <TableHead className="w-[50px]">Выбор</TableHead>}
+            {result.bitrix_companies.length > 1 && (
+              <TableHead className="w-[50px]">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onCheckedChange={onToggleAll}
+                  aria-label="Выбрать все"
+                />
+              </TableHead>
+            )}
             <TableHead className="min-w-[80px]">ID</TableHead>
             <TableHead className="min-w-[200px]">
               <div className="space-y-1">

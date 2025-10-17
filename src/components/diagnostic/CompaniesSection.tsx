@@ -12,6 +12,7 @@ interface CompaniesSectionProps {
   deletingCompanies: boolean;
   filters: CompanyFilters;
   onToggleCompany: (companyId: string) => void;
+  onToggleAll: () => void;
   onDeleteSelected: () => void;
   onFilterChange: (filters: CompanyFilters) => void;
 }
@@ -23,6 +24,7 @@ export default function CompaniesSection({
   deletingCompanies,
   filters,
   onToggleCompany,
+  onToggleAll,
   onDeleteSelected,
   onFilterChange,
 }: CompaniesSectionProps) {
@@ -98,6 +100,7 @@ export default function CompaniesSection({
         selectedCompanies={selectedCompanies}
         filters={filters}
         onToggleCompany={onToggleCompany}
+        onToggleAll={onToggleAll}
         onFilterChange={onFilterChange}
       />
     </div>

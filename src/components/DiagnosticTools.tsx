@@ -98,6 +98,20 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
     setSelectedCompanies(newSelection);
   };
 
+  const toggleAllCompanies = () => {
+    const allSelected = filteredCompanies.every(c => selectedCompanies.has(c.ID));
+    
+    if (allSelected) {
+      const newSelection = new Set(selectedCompanies);
+      filteredCompanies.forEach(c => newSelection.delete(c.ID));
+      setSelectedCompanies(newSelection);
+    } else {
+      const newSelection = new Set(selectedCompanies);
+      filteredCompanies.forEach(c => newSelection.add(c.ID));
+      setSelectedCompanies(newSelection);
+    }
+  };
+
   const deleteSelectedCompanies = async () => {
     if (selectedCompanies.size === 0) return;
 
@@ -198,6 +212,7 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
                 deletingCompanies={deletingCompanies}
                 filters={filters}
                 onToggleCompany={toggleCompanySelection}
+                onToggleAll={toggleAllCompanies}
                 onDeleteSelected={deleteSelectedCompanies}
                 onFilterChange={setFilters}
               />
