@@ -44,37 +44,38 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 conn.commit()
                 return response_json(400, {'error': 'inn and bitrix_id are required'})
             
-            cur.execute("SELECT bitrix_id, title, created_at FROM companies WHERE inn = %s AND bitrix_id != %s ORDER BY created_at ASC", (inn, bitrix_id))
-            existing_companies = cur.fetchall()
+            search_result = find_duplicate_companies_by_inn(inn)
             
-            if len(existing_companies) > 0:
-                old_company = existing_companies[0]
-                action_taken = f"Duplicate INN found. Existing company: {old_company['bitrix_id']}"
-                deleted = False
+            if search_result.get('success') and len(search_result.get('companies', [])) > 0:
+                bitrix_companies = search_result['companies']
                 
-                delete_result = delete_bitrix_company(bitrix_id)
-                if delete_result.get('success'):
-                    action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company['bitrix_id']})"
-                    deleted = True
-                else:
-                    action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
+                existing_ids = [c['ID'] for c in bitrix_companies if c['ID'] != bitrix_id]
                 
-                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken)
-                conn.commit()
-                
-                return response_json(200, {
-                    'duplicate': True,
-                    'inn': inn,
-                    'new_company_id': bitrix_id,
-                    'existing_company': {
-                        'bitrix_id': old_company['bitrix_id'],
-                        'title': old_company['title'],
-                        'created_at': old_company['created_at'].isoformat()
-                    },
-                    'action': 'deleted' if deleted else 'delete_failed',
-                    'deleted': deleted,
-                    'message': action_taken
-                })
+                if len(existing_ids) > 0:
+                    old_company_id = existing_ids[0]
+                    action_taken = f"Duplicate INN found in Bitrix24. Existing company: {old_company_id}"
+                    deleted = False
+                    
+                    delete_result = delete_bitrix_company(bitrix_id)
+                    if delete_result.get('success'):
+                        action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company_id})"
+                        deleted = True
+                    else:
+                        action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
+                    
+                    log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken)
+                    conn.commit()
+                    
+                    return response_json(200, {
+                        'duplicate': True,
+                        'inn': inn,
+                        'new_company_id': bitrix_id,
+                        'existing_company_id': old_company_id,
+                        'bitrix_companies': bitrix_companies,
+                        'action': 'deleted' if deleted else 'delete_failed',
+                        'deleted': deleted,
+                        'message': action_taken
+                    })
             
             cur.execute(
                 "INSERT INTO companies (bitrix_id, inn, title) VALUES (%s, %s, %s) ON CONFLICT (bitrix_id) DO UPDATE SET inn = EXCLUDED.inn, title = EXCLUDED.title, updated_at = CURRENT_TIMESTAMP",
@@ -126,6 +127,33 @@ def serialize_log(log: Dict) -> Dict:
     if 'created_at' in result and result['created_at']:
         result['created_at'] = result['created_at'].isoformat()
     return result
+
+def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured', 'companies': []}
+    
+    try:
+        url = f"{bitrix_webhook.rstrip('/')}/crm.company.list.json"
+        params = {
+            'filter': {'RQ_INN': inn},
+            'select': ['ID', 'TITLE', 'DATE_CREATE']
+        }
+        
+        data = urllib.parse.urlencode({'filter[RQ_INN]': inn, 'select[]': ['ID', 'TITLE', 'DATE_CREATE']}).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            
+            if result.get('result'):
+                return {'success': True, 'companies': result['result']}
+            else:
+                return {'success': False, 'error': result.get('error_description', 'Unknown error'), 'companies': []}
+    
+    except Exception as e:
+        return {'success': False, 'error': str(e), 'companies': []}
 
 def delete_bitrix_company(company_id: str) -> Dict[str, Any]:
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
