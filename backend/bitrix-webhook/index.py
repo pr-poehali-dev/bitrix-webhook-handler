@@ -33,89 +33,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
+        headers = event.get('headers', {})
+        user_agent = headers.get('User-Agent', headers.get('user-agent', 'Unknown'))
+        source_ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'Unknown')
+        source_info = f"IP: {source_ip} | UA: {user_agent[:100]}"
+        
         if method == 'POST':
-            headers = event.get('headers', {})
-            user_agent = headers.get('User-Agent', headers.get('user-agent', 'Unknown'))
-            source_ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'Unknown')
-            source_info = f"IP: {source_ip} | UA: {user_agent[:100]}"
-            
             body_str = event.get('body', '{}')
             if not body_str or body_str.strip() == '':
                 body_str = '{}'
             body_data = json.loads(body_str)
             bitrix_id: str = body_data.get('bitrix_id', '').strip()
-            
-            if not bitrix_id:
-                log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Missing bitrix_id', source_info)
-                conn.commit()
-                return response_json(400, {'error': 'bitrix_id is required'})
-            
-            company_data = get_bitrix_company(bitrix_id)
-            
-            if not company_data.get('success'):
-                error_msg = f"Failed to get company data: {company_data.get('error')}"
-                log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, error_msg, source_info)
-                conn.commit()
-                return response_json(400, {'error': error_msg})
-            
-            company_info = company_data.get('company', {})
-            inn: str = company_info.get('RQ_INN', '').strip()
-            title: str = company_info.get('TITLE', '')
-            
-            if not inn:
-                log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Company has no INN', source_info)
-                conn.commit()
-                return response_json(200, {'duplicate': False, 'message': 'Company has no INN, skipping check'})
-            
-            search_result = find_duplicate_companies_by_inn(inn)
-            
-            if search_result.get('success') and len(search_result.get('companies', [])) > 0:
-                bitrix_companies = search_result['companies']
-                
-                existing_ids = [c['ID'] for c in bitrix_companies if c['ID'] != bitrix_id]
-                
-                if len(existing_ids) > 0:
-                    old_company_id = existing_ids[0]
-                    action_taken = f"Duplicate INN found in Bitrix24. Existing company: {old_company_id}"
-                    deleted = False
-                    
-                    delete_result = delete_bitrix_company(bitrix_id)
-                    if delete_result.get('success'):
-                        action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company_id})"
-                        deleted = True
-                    else:
-                        action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
-                    
-                    log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken, source_info)
-                    conn.commit()
-                    
-                    return response_json(200, {
-                        'duplicate': True,
-                        'inn': inn,
-                        'new_company_id': bitrix_id,
-                        'existing_company_id': old_company_id,
-                        'bitrix_companies': bitrix_companies,
-                        'action': 'deleted' if deleted else 'delete_failed',
-                        'deleted': deleted,
-                        'message': action_taken
-                    })
-            
-            cur.execute(
-                "INSERT INTO companies (bitrix_id, inn, title) VALUES (%s, %s, %s) ON CONFLICT (bitrix_id) DO UPDATE SET inn = EXCLUDED.inn, title = EXCLUDED.title, updated_at = CURRENT_TIMESTAMP",
-                (bitrix_id, inn, title)
-            )
-            
-            log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'success', False, 'No duplicate, company saved', source_info)
-            conn.commit()
-            
-            return response_json(200, {
-                'duplicate': False,
-                'inn': inn,
-                'bitrix_id': bitrix_id,
-                'message': 'ИНН уникален, компания сохранена'
-            })
+        elif method == 'GET':
+            query_params = event.get('queryStringParameters', {}) or {}
+            bitrix_id: str = query_params.get('bitrix_id', query_params.get('id', '')).strip()
+            body_data = {'bitrix_id': bitrix_id, 'method': 'GET'}
+        else:
+            return response_json(405, {'error': 'Method not allowed'})
         
-        if method == 'GET':
+        if not bitrix_id:
             cur.execute("SELECT * FROM webhook_logs ORDER BY created_at DESC LIMIT 100")
             logs = cur.fetchall()
             
@@ -133,6 +69,71 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'logs': [serialize_log(log) for log in logs] if logs else [],
                 'stats': stats
             })
+            
+        company_data = get_bitrix_company(bitrix_id)
+        
+        if not company_data.get('success'):
+            error_msg = f"Failed to get company data: {company_data.get('error')}"
+            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, error_msg, source_info)
+            conn.commit()
+            return response_json(400, {'error': error_msg})
+        
+        company_info = company_data.get('company', {})
+        inn: str = company_info.get('RQ_INN', '').strip()
+        title: str = company_info.get('TITLE', '')
+        
+        if not inn:
+            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Company has no INN', source_info)
+            conn.commit()
+            return response_json(200, {'duplicate': False, 'message': 'Company has no INN, skipping check'})
+        
+        search_result = find_duplicate_companies_by_inn(inn)
+        
+        if search_result.get('success') and len(search_result.get('companies', [])) > 0:
+            bitrix_companies = search_result['companies']
+            
+            existing_ids = [c['ID'] for c in bitrix_companies if c['ID'] != bitrix_id]
+            
+            if len(existing_ids) > 0:
+                old_company_id = existing_ids[0]
+                action_taken = f"Duplicate INN found in Bitrix24. Existing company: {old_company_id}"
+                deleted = False
+                
+                delete_result = delete_bitrix_company(bitrix_id)
+                if delete_result.get('success'):
+                    action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company_id})"
+                    deleted = True
+                else:
+                    action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
+                
+                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken, source_info)
+                conn.commit()
+                
+                return response_json(200, {
+                    'duplicate': True,
+                    'inn': inn,
+                    'new_company_id': bitrix_id,
+                    'existing_company_id': old_company_id,
+                    'bitrix_companies': bitrix_companies,
+                    'action': 'deleted' if deleted else 'delete_failed',
+                    'deleted': deleted,
+                    'message': action_taken
+                })
+        
+        cur.execute(
+            "INSERT INTO companies (bitrix_id, inn, title) VALUES (%s, %s, %s) ON CONFLICT (bitrix_id) DO UPDATE SET inn = EXCLUDED.inn, title = EXCLUDED.title, updated_at = CURRENT_TIMESTAMP",
+            (bitrix_id, inn, title)
+        )
+        
+        log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'success', False, 'No duplicate, company saved', source_info)
+        conn.commit()
+        
+        return response_json(200, {
+            'duplicate': False,
+            'inn': inn,
+            'bitrix_id': bitrix_id,
+            'message': 'ИНН уникален, компания сохранена'
+        })
     
     finally:
         cur.close()
