@@ -218,45 +218,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             print(f"[DEBUG] Duplicate detected! Current: {bitrix_id}, Existing: {old_company_id}")
             
-            # Сохраняем ВСЕ данные компании перед удалением
-            company_backup = {
-                'bitrix_id': bitrix_id,
-                'inn': inn,
-                'TITLE': title,
-                'RQ_INN': inn,
-                'ASSIGNED_BY_ID': company_info.get('ASSIGNED_BY_ID'),
-                'COMPANY_TYPE': company_info.get('COMPANY_TYPE'),
-                'INDUSTRY': company_info.get('INDUSTRY'),
-                'EMPLOYEES': company_info.get('EMPLOYEES'),
-                'CURRENCY_ID': company_info.get('CURRENCY_ID'),
-                'REVENUE': company_info.get('REVENUE'),
-                'OPENED': company_info.get('OPENED'),
-                'COMMENTS': company_info.get('COMMENTS'),
-                'BANKING_DETAILS': company_info.get('BANKING_DETAILS'),
-                'ADDRESS': company_info.get('ADDRESS'),
-                'ADDRESS_2': company_info.get('ADDRESS_2'),
-                'ADDRESS_CITY': company_info.get('ADDRESS_CITY'),
-                'ADDRESS_POSTAL_CODE': company_info.get('ADDRESS_POSTAL_CODE'),
-                'ADDRESS_REGION': company_info.get('ADDRESS_REGION'),
-                'ADDRESS_PROVINCE': company_info.get('ADDRESS_PROVINCE'),
-                'ADDRESS_COUNTRY': company_info.get('ADDRESS_COUNTRY'),
-                'REG_ADDRESS': company_info.get('REG_ADDRESS'),
-                'REG_ADDRESS_2': company_info.get('REG_ADDRESS_2'),
-                'REG_ADDRESS_CITY': company_info.get('REG_ADDRESS_CITY'),
-                'REG_ADDRESS_POSTAL_CODE': company_info.get('REG_ADDRESS_POSTAL_CODE'),
-                'REG_ADDRESS_REGION': company_info.get('REG_ADDRESS_REGION'),
-                'REG_ADDRESS_PROVINCE': company_info.get('REG_ADDRESS_PROVINCE'),
-                'REG_ADDRESS_COUNTRY': company_info.get('REG_ADDRESS_COUNTRY'),
-                'UTM_SOURCE': company_info.get('UTM_SOURCE'),
-                'UTM_MEDIUM': company_info.get('UTM_MEDIUM'),
-                'UTM_CAMPAIGN': company_info.get('UTM_CAMPAIGN'),
-                'UTM_CONTENT': company_info.get('UTM_CONTENT'),
-                'UTM_TERM': company_info.get('UTM_TERM'),
-                'PHONE': company_info.get('PHONE'),
-                'EMAIL': company_info.get('EMAIL'),
-                'WEB': company_info.get('WEB'),
-                'IM': company_info.get('IM'),
-            }
+            # КРИТИЧНО: Сохраняем ПОЛНЫЙ объект компании со ВСЕМИ полями
+            # company_info уже содержит ВСЕ поля + дела (добавлены в get_bitrix_company)
+            company_backup = dict(company_info)
+            company_backup['ID'] = bitrix_id  # Сохраняем оригинальный ID
+            company_backup['bitrix_id'] = bitrix_id  # Дублируем для совместимости
+            
+            print(f"[DEBUG] Company backup created with {len(company_backup)} fields")
+            print(f"[DEBUG] Deals in backup: {len(company_backup.get('DEALS', []))} deals")
             
             delete_result = delete_bitrix_company(bitrix_id)
             if delete_result.get('success'):
@@ -333,9 +302,10 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
         return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
     
     try:
+        # Получаем ВСЕ поля компании
         params = urllib.parse.urlencode({'ID': company_id})
         url = f"{bitrix_webhook.rstrip('/')}/crm.company.get.json?{params}"
-        print(f"[DEBUG] Requesting Bitrix24: {url}")
+        print(f"[DEBUG] Requesting Bitrix24 company with ALL fields: {url}")
         
         with urllib.request.urlopen(url, timeout=10) as response:
             response_text = response.read().decode('utf-8')
@@ -351,6 +321,11 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
                     inn = get_company_inn_from_requisites(company_id)
                     print(f"[DEBUG] INN from requisites: {inn}")
                     company['RQ_INN'] = inn
+                
+                # Получаем дела по компании
+                deals = get_company_deals(company_id)
+                company['DEALS'] = deals
+                print(f"[DEBUG] Found {len(deals)} deals for company {company_id}")
                 
                 return {'success': True, 'company': company}
             else:
@@ -522,68 +497,68 @@ def send_notification_to_user(user_id: str, message: str, company_id: str, compa
         return {'success': False, 'error': str(e)}
 
 def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
+    '''Восстанавливает компанию с ПОЛНЫМ копированием ВСЕХ полей и дел'''
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
     
     if not bitrix_webhook:
         return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
     
     try:
-        # Создаём компанию заново с ВСЕМИ сохранёнными данными
         url = f"{bitrix_webhook.rstrip('/')}/crm.company.add.json"
         
-        fields = {
-            'fields[TITLE]': company_data.get('TITLE', 'Восстановленная компания'),
-            'fields[RQ_INN]': company_data.get('RQ_INN', company_data.get('inn', '')),
+        original_id = company_data.get('ID', company_data.get('bitrix_id'))
+        print(f"[DEBUG] Restoring company {original_id} with full data copy")
+        print(f"[DEBUG] Company data keys: {list(company_data.keys())[:20]}...")
+        
+        # Список полей-исключений (системные, не для копирования)
+        skip_fields = {'ID', 'bitrix_id', 'inn', 'DEALS', 'DATE_CREATE', 'DATE_MODIFY', 
+                      'CREATED_BY_ID', 'MODIFY_BY_ID', 'COMPANY_ID'}
+        
+        fields = {}
+        
+        # Автоматически копируем ВСЕ простые поля из backup
+        for key, value in company_data.items():
+            if key in skip_fields or value is None or value == '':
+                continue
+            
+            # Мультиполя обрабатываем отдельно
+            if key in ['PHONE', 'EMAIL', 'WEB', 'IM']:
+                continue
+            
+            # Если это список или словарь - пропускаем (кроме уже обработанных)
+            if isinstance(value, (list, dict)):
+                continue
+            
+            # Простое поле - копируем напрямую
+            fields[f'fields[{key}]'] = str(value)
+        
+        # Обязательные поля
+        fields['fields[TITLE]'] = company_data.get('TITLE', 'Восстановленная компания')
+        fields['fields[RQ_INN]'] = company_data.get('RQ_INN', company_data.get('inn', ''))
+        
+        # Восстанавливаем мультиполя с полной структурой
+        multifields = {
+            'PHONE': company_data.get('PHONE', []),
+            'EMAIL': company_data.get('EMAIL', []),
+            'WEB': company_data.get('WEB', []),
+            'IM': company_data.get('IM', [])
         }
         
-        # Восстанавливаем ВСЕ основные поля если они были
-        optional_fields = [
-            'ASSIGNED_BY_ID', 'COMPANY_TYPE', 'INDUSTRY', 'EMPLOYEES',
-            'CURRENCY_ID', 'REVENUE', 'OPENED', 'COMMENTS', 'BANKING_DETAILS',
-            'ADDRESS', 'ADDRESS_2', 'ADDRESS_CITY', 'ADDRESS_POSTAL_CODE',
-            'ADDRESS_REGION', 'ADDRESS_PROVINCE', 'ADDRESS_COUNTRY',
-            'REG_ADDRESS', 'REG_ADDRESS_2', 'REG_ADDRESS_CITY',
-            'REG_ADDRESS_POSTAL_CODE', 'REG_ADDRESS_REGION', 'REG_ADDRESS_PROVINCE',
-            'REG_ADDRESS_COUNTRY', 'UTM_SOURCE', 'UTM_MEDIUM', 'UTM_CAMPAIGN',
-            'UTM_CONTENT', 'UTM_TERM'
-        ]
+        for field_name, field_values in multifields.items():
+            if not field_values:
+                continue
+            
+            # Приводим к списку если это не список
+            if not isinstance(field_values, list):
+                field_values = [{'VALUE': field_values}]
+            
+            for idx, item in enumerate(field_values):
+                if isinstance(item, dict) and item.get('VALUE'):
+                    fields[f'fields[{field_name}][{idx}][VALUE]'] = item['VALUE']
+                    if item.get('VALUE_TYPE'):
+                        fields[f'fields[{field_name}][{idx}][VALUE_TYPE]'] = item['VALUE_TYPE']
         
-        for field in optional_fields:
-            if company_data.get(field):
-                fields[f'fields[{field}]'] = company_data[field]
-        
-        # Восстанавливаем мультиполя (телефон, email, web, im)
-        if company_data.get('PHONE'):
-            phones = company_data['PHONE'] if isinstance(company_data['PHONE'], list) else [{'VALUE': company_data['PHONE']}]
-            for idx, phone in enumerate(phones):
-                if phone.get('VALUE'):
-                    fields[f'fields[PHONE][{idx}][VALUE]'] = phone['VALUE']
-                    if phone.get('VALUE_TYPE'):
-                        fields[f'fields[PHONE][{idx}][VALUE_TYPE]'] = phone['VALUE_TYPE']
-        
-        if company_data.get('EMAIL'):
-            emails = company_data['EMAIL'] if isinstance(company_data['EMAIL'], list) else [{'VALUE': company_data['EMAIL']}]
-            for idx, email in enumerate(emails):
-                if email.get('VALUE'):
-                    fields[f'fields[EMAIL][{idx}][VALUE]'] = email['VALUE']
-                    if email.get('VALUE_TYPE'):
-                        fields[f'fields[EMAIL][{idx}][VALUE_TYPE]'] = email['VALUE_TYPE']
-        
-        if company_data.get('WEB'):
-            webs = company_data['WEB'] if isinstance(company_data['WEB'], list) else [{'VALUE': company_data['WEB']}]
-            for idx, web in enumerate(webs):
-                if web.get('VALUE'):
-                    fields[f'fields[WEB][{idx}][VALUE]'] = web['VALUE']
-                    if web.get('VALUE_TYPE'):
-                        fields[f'fields[WEB][{idx}][VALUE_TYPE]'] = web['VALUE_TYPE']
-        
-        if company_data.get('IM'):
-            ims = company_data['IM'] if isinstance(company_data['IM'], list) else [{'VALUE': company_data['IM']}]
-            for idx, im in enumerate(ims):
-                if im.get('VALUE'):
-                    fields[f'fields[IM][{idx}][VALUE]'] = im['VALUE']
-                    if im.get('VALUE_TYPE'):
-                        fields[f'fields[IM][{idx}][VALUE_TYPE]'] = im['VALUE_TYPE']
+        print(f"[DEBUG] Prepared {len(fields)} fields for restore")
         
         data = urllib.parse.urlencode(fields).encode('utf-8')
         req = urllib.request.Request(url, data=data)
@@ -593,8 +568,16 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
             
             if result.get('result'):
                 new_company_id = result['result']
-                print(f"[DEBUG] Company restored with new ID: {new_company_id}")
-                return {'success': True, 'company_id': str(new_company_id)}
+                print(f"[DEBUG] Company restored with new ID: {new_company_id} (original was {original_id})")
+                
+                # Восстанавливаем дела, переназначая их на новую компанию
+                deals = company_data.get('DEALS', [])
+                if deals:
+                    print(f"[DEBUG] Restoring {len(deals)} deals to new company {new_company_id}")
+                    restore_deals_result = restore_company_deals(deals, new_company_id)
+                    print(f"[DEBUG] Deals restore result: {restore_deals_result}")
+                
+                return {'success': True, 'company_id': str(new_company_id), 'original_id': original_id}
             else:
                 error_msg = result.get('error_description', result.get('error', 'Unknown error'))
                 print(f"[DEBUG] Restore error: {error_msg}")
@@ -602,9 +585,78 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
     
     except Exception as e:
         print(f"[DEBUG] Exception restoring company: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         return {'success': False, 'error': str(e)}
 
+def restore_company_deals(deals: List[Dict[str, Any]], new_company_id: str) -> Dict[str, Any]:
+    '''Копирует дела на восстановленную компанию'''
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook or not deals:
+        return {'success': False, 'restored_count': 0}
+    
+    restored_count = 0
+    errors = []
+    
+    for deal in deals:
+        try:
+            url = f"{bitrix_webhook.rstrip('/')}/crm.deal.update.json"
+            params = {
+                'ID': deal['ID'],
+                'fields[COMPANY_ID]': new_company_id
+            }
+            
+            data = urllib.parse.urlencode(params).encode('utf-8')
+            req = urllib.request.Request(url, data=data)
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                
+                if result.get('result'):
+                    restored_count += 1
+                else:
+                    errors.append(f"Deal {deal['ID']}: {result.get('error_description', 'Unknown error')}")
+        
+        except Exception as e:
+            errors.append(f"Deal {deal['ID']}: {str(e)}")
+    
+    print(f"[DEBUG] Restored {restored_count}/{len(deals)} deals")
+    if errors:
+        print(f"[DEBUG] Errors: {errors}")
+    
+    return {'success': True, 'restored_count': restored_count, 'total': len(deals), 'errors': errors}
+
+def get_company_deals(company_id: str) -> List[Dict[str, Any]]:
+    '''Получает все дела по компании'''
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        print(f"[DEBUG] BITRIX24_WEBHOOK_URL not configured")
+        return []
+    
+    try:
+        filter_params = urllib.parse.urlencode({'filter[COMPANY_ID]': company_id})
+        url = f"{bitrix_webhook.rstrip('/')}/crm.deal.list.json?{filter_params}"
+        print(f"[DEBUG] Getting deals for company {company_id}: {url}")
+        
+        with urllib.request.urlopen(url, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            
+            if result.get('result'):
+                deals = result['result']
+                print(f"[DEBUG] Found {len(deals)} deals")
+                return deals
+            else:
+                print(f"[DEBUG] No deals found or error: {result}")
+                return []
+    
+    except Exception as e:
+        print(f"[DEBUG] Exception getting deals: {type(e).__name__}: {str(e)}")
+        return []
+
 def delete_bitrix_company(company_id: str) -> Dict[str, Any]:
+    '''Удаляет компанию из Битрикс24'''
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
     
     if not bitrix_webhook:
@@ -621,12 +673,15 @@ def delete_bitrix_company(company_id: str) -> Dict[str, Any]:
             result = json.loads(response.read().decode('utf-8'))
             
             if result.get('result'):
+                print(f"[DEBUG] Company {company_id} deleted successfully")
                 return {'success': True, 'data': result}
             else:
                 error_msg = result.get('error_description', 'Unknown error')
+                print(f"[DEBUG] Delete error: {error_msg}")
                 return {'success': False, 'error': error_msg}
     
     except Exception as e:
+        print(f"[DEBUG] Exception deleting company: {type(e).__name__}: {str(e)}")
         return {'success': False, 'error': str(e)}
 
 def response_json(status_code: int, data: Dict) -> Dict[str, Any]:
