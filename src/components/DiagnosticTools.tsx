@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Icon from '@/components/ui/icon';
 
 interface DiagnosticResult {
@@ -15,6 +16,11 @@ interface DiagnosticResult {
     TITLE: string;
     DATE_CREATE?: string;
     is_active?: boolean;
+    COMPANY_TYPE?: string;
+    RQ_INN?: string;
+    RQ_KPP?: string;
+    PHONE?: string;
+    EMAIL?: string;
   }>;
   requisites_in_db: Array<{
     id: string;
@@ -42,6 +48,14 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
   const [cleaningOrphans, setCleaningOrphans] = useState(false);
   const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
   const [deletingCompanies, setDeletingCompanies] = useState(false);
+  const [filters, setFilters] = useState({
+    title: '',
+    type: '',
+    inn: '',
+    kpp: '',
+    phone: '',
+    email: '',
+  });
 
   const checkInn = async () => {
     if (!inn.trim()) {
@@ -53,6 +67,7 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
     setError('');
     setResult(null);
     setSelectedCompanies(new Set());
+    setFilters({ title: '', type: '', inn: '', kpp: '', phone: '', email: '' });
 
     try {
       const response = await fetch(`${apiUrl}?action=diagnose&inn=${encodeURIComponent(inn.trim())}`);
@@ -141,6 +156,21 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
     }
   };
 
+  const filteredCompanies = useMemo(() => {
+    if (!result?.bitrix_companies) return [];
+
+    return result.bitrix_companies.filter((company) => {
+      const matchTitle = company.TITLE.toLowerCase().includes(filters.title.toLowerCase());
+      const matchType = (company.COMPANY_TYPE || '').toLowerCase().includes(filters.type.toLowerCase());
+      const matchInn = (company.RQ_INN || '').includes(filters.inn);
+      const matchKpp = (company.RQ_KPP || '').includes(filters.kpp);
+      const matchPhone = (company.PHONE || '').includes(filters.phone);
+      const matchEmail = (company.EMAIL || '').toLowerCase().includes(filters.email.toLowerCase());
+
+      return matchTitle && matchType && matchInn && matchKpp && matchPhone && matchEmail;
+    });
+  }, [result, filters]);
+
   return (
     <Card className="border-border bg-card">
       <CardHeader>
@@ -207,11 +237,11 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
             </div>
 
             {result.bitrix_companies.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold flex items-center gap-2">
                     <Icon name="Building2" size={16} />
-                    Активные компании в Битрикс24:
+                    Активные компании в Битрикс24: {filteredCompanies.length} из {result.bitrix_companies.length}
                   </p>
                   {result.bitrix_companies.length > 1 && (
                     <AlertDialog>
@@ -272,31 +302,119 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
                   </Alert>
                 )}
 
-                <div className="space-y-1">
-                  {result.bitrix_companies.map((company) => (
-                    <div 
-                      key={company.ID} 
-                      className={`p-3 rounded flex items-center justify-between ${
-                        selectedCompanies.has(company.ID) ? 'bg-destructive/20 border border-destructive' : 'bg-secondary'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {result.bitrix_companies.length > 1 && (
-                          <Checkbox
-                            checked={selectedCompanies.has(company.ID)}
-                            onCheckedChange={() => toggleCompanySelection(company.ID)}
-                          />
-                        )}
-                        <div>
-                          <span className="font-mono font-semibold">ID: {company.ID}</span>
-                          {company.TITLE && <span className="ml-2 text-muted-foreground">— {company.TITLE}</span>}
-                        </div>
-                      </div>
-                      {company.DATE_CREATE && (
-                        <span className="text-xs text-muted-foreground">{company.DATE_CREATE}</span>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {result.bitrix_companies.length > 1 && <TableHead className="w-[50px]">Выбор</TableHead>}
+                        <TableHead className="min-w-[80px]">ID</TableHead>
+                        <TableHead className="min-w-[200px]">
+                          <div className="space-y-1">
+                            <div>Наименование</div>
+                            <Input
+                              placeholder="Фильтр..."
+                              value={filters.title}
+                              onChange={(e) => setFilters(f => ({ ...f, title: e.target.value }))}
+                              className="h-7 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[150px]">
+                          <div className="space-y-1">
+                            <div>Тип компании</div>
+                            <Input
+                              placeholder="Фильтр..."
+                              value={filters.type}
+                              onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
+                              className="h-7 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[120px]">
+                          <div className="space-y-1">
+                            <div>ИНН</div>
+                            <Input
+                              placeholder="Фильтр..."
+                              value={filters.inn}
+                              onChange={(e) => setFilters(f => ({ ...f, inn: e.target.value }))}
+                              className="h-7 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[120px]">
+                          <div className="space-y-1">
+                            <div>КПП</div>
+                            <Input
+                              placeholder="Фильтр..."
+                              value={filters.kpp}
+                              onChange={(e) => setFilters(f => ({ ...f, kpp: e.target.value }))}
+                              className="h-7 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[140px]">
+                          <div className="space-y-1">
+                            <div>Телефон</div>
+                            <Input
+                              placeholder="Фильтр..."
+                              value={filters.phone}
+                              onChange={(e) => setFilters(f => ({ ...f, phone: e.target.value }))}
+                              className="h-7 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead className="min-w-[180px]">
+                          <div className="space-y-1">
+                            <div>Email</div>
+                            <Input
+                              placeholder="Фильтр..."
+                              value={filters.email}
+                              onChange={(e) => setFilters(f => ({ ...f, email: e.target.value }))}
+                              className="h-7 text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCompanies.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={result.bitrix_companies.length > 1 ? 8 : 7} className="text-center text-muted-foreground">
+                            Нет компаний, соответствующих фильтрам
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredCompanies.map((company) => (
+                          <TableRow 
+                            key={company.ID}
+                            className={selectedCompanies.has(company.ID) ? 'bg-destructive/20' : ''}
+                          >
+                            {result.bitrix_companies.length > 1 && (
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedCompanies.has(company.ID)}
+                                  onCheckedChange={() => toggleCompanySelection(company.ID)}
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell className="font-mono font-semibold">{company.ID}</TableCell>
+                            <TableCell>{company.TITLE}</TableCell>
+                            <TableCell>{company.COMPANY_TYPE || '—'}</TableCell>
+                            <TableCell className="font-mono">{company.RQ_INN || '—'}</TableCell>
+                            <TableCell className="font-mono">{company.RQ_KPP || '—'}</TableCell>
+                            <TableCell className="font-mono">{company.PHONE || '—'}</TableCell>
+                            <TableCell>{company.EMAIL || '—'}</TableCell>
+                          </TableRow>
+                        ))
                       )}
-                    </div>
-                  ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}

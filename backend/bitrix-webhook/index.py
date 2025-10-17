@@ -904,8 +904,9 @@ def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
     '''
     Диагностирует проблемы с дубликатами ИНН:
     1. Ищет активные компании в Битрикс24 через API
-    2. Ищет реквизиты в базе данных Битрикс24
-    3. Сравнивает результаты и находит "мусорные" реквизиты
+    2. Получает полные данные каждой компании с реквизитами
+    3. Ищет реквизиты в базе данных Битрикс24
+    4. Сравнивает результаты и находит "мусорные" реквизиты
     '''
     result = {
         'inn': inn,
@@ -921,8 +922,42 @@ def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
     # 1. Ищем активные компании через API Битрикс24
     search_result = find_duplicate_companies_by_inn(inn)
     if search_result.get('success') and search_result.get('companies'):
-        result['bitrix_companies'] = search_result['companies']
-        result['summary']['total_bitrix'] = len(search_result['companies'])
+        companies_with_full_data = []
+        
+        for company in search_result['companies']:
+            company_id = company.get('ID')
+            full_data_result = get_bitrix_company(str(company_id))
+            
+            if full_data_result.get('success'):
+                company_full = full_data_result['company']
+                
+                requisites = company_full.get('REQUISITES', [])
+                req_data = requisites[0] if requisites else {}
+                
+                phone_value = ''
+                if company_full.get('PHONE') and isinstance(company_full['PHONE'], list) and len(company_full['PHONE']) > 0:
+                    phone_value = company_full['PHONE'][0].get('VALUE', '')
+                
+                email_value = ''
+                if company_full.get('EMAIL') and isinstance(company_full['EMAIL'], list) and len(company_full['EMAIL']) > 0:
+                    email_value = company_full['EMAIL'][0].get('VALUE', '')
+                
+                companies_with_full_data.append({
+                    'ID': company_id,
+                    'TITLE': company_full.get('TITLE', ''),
+                    'DATE_CREATE': company_full.get('DATE_CREATE', ''),
+                    'is_active': True,
+                    'COMPANY_TYPE': company_full.get('COMPANY_TYPE', ''),
+                    'RQ_INN': req_data.get('RQ_INN', ''),
+                    'RQ_KPP': req_data.get('RQ_KPP', ''),
+                    'PHONE': phone_value,
+                    'EMAIL': email_value,
+                })
+            else:
+                companies_with_full_data.append(company)
+        
+        result['bitrix_companies'] = companies_with_full_data
+        result['summary']['total_bitrix'] = len(companies_with_full_data)
     
     # 2. Ищем реквизиты в базе данных Битрикс24 напрямую
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
