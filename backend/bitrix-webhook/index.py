@@ -111,6 +111,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'message': f"Удалено {clean_result.get('cleaned_count', 0)} мусорных реквизитов"
                 })
             
+            # Проверяем, если это запрос на удаление выбранных компаний
+            if action == 'delete_companies':
+                company_ids = body_data.get('company_ids', [])
+                inn_for_log = body_data.get('inn', '')
+                
+                if not company_ids or len(company_ids) == 0:
+                    return response_json(400, {'success': False, 'error': 'Не указаны ID компаний для удаления'})
+                
+                delete_result = delete_multiple_companies(company_ids)
+                log_webhook(cur, 'delete_companies', inn_for_log, ','.join(company_ids), body_data, 'success', False, f"Deleted {delete_result.get('deleted_count', 0)} companies", source_info, method)
+                conn.commit()
+                
+                return response_json(200, {
+                    'success': True,
+                    'deleted_count': delete_result.get('deleted_count', 0),
+                    'failed_count': delete_result.get('failed_count', 0),
+                    'details': delete_result.get('details', []),
+                    'message': f"Удалено компаний: {delete_result.get('deleted_count', 0)}"
+                })
+            
         elif method == 'GET':
             query_params = event.get('queryStringParameters', {}) or {}
             
@@ -992,3 +1012,40 @@ def clean_orphaned_requisites(inn: str) -> Dict[str, Any]:
             'error': str(e),
             'cleaned_count': cleaned_count
         }
+
+def delete_multiple_companies(company_ids: List[str]) -> Dict[str, Any]:
+    '''
+    Безопасное удаление нескольких компаний из Битрикс24 по списку ID
+    Возвращает детальную информацию о результатах удаления
+    '''
+    deleted = []
+    failed = []
+    
+    print(f"[DEBUG] Starting bulk delete for {len(company_ids)} companies: {company_ids}")
+    
+    for company_id in company_ids:
+        print(f"[DEBUG] Attempting to delete company {company_id}")
+        result = delete_bitrix_company(company_id)
+        
+        if result.get('success'):
+            deleted.append(company_id)
+            print(f"[DEBUG] Successfully deleted company {company_id}")
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            failed.append({
+                'company_id': company_id,
+                'error': error_msg
+            })
+            print(f"[DEBUG] Failed to delete company {company_id}: {error_msg}")
+    
+    print(f"[DEBUG] Bulk delete completed: {len(deleted)} deleted, {len(failed)} failed")
+    
+    return {
+        'success': True,
+        'deleted_count': len(deleted),
+        'failed_count': len(failed),
+        'details': {
+            'deleted': deleted,
+            'failed': failed
+        }
+    }
