@@ -70,9 +70,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             # Проверяем, если это запрос на восстановление компании
             restore_action = body_data.get('action', '')
+            print(f"[DEBUG] POST body_data: {body_data}")
+            print(f"[DEBUG] restore_action: {restore_action}")
+            
             if restore_action == 'restore':
                 original_data = body_data.get('original_data', {})
+                print(f"[DEBUG] Restoring company with data: {original_data}")
                 restore_result = restore_deleted_company(original_data)
+                print(f"[DEBUG] Restore result: {restore_result}")
                 
                 if restore_result.get('success'):
                     log_webhook(cur, 'restore_company', original_data.get('inn', ''), restore_result.get('company_id', ''), body_data, 'success', False, f"Company restored: {restore_result.get('company_id')}", source_info, method)

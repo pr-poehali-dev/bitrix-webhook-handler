@@ -76,14 +76,19 @@ export default function Index() {
   const restoreCompany = async (log: WebhookLog) => {
     setRestoringId(log.id);
     try {
+      console.log('Restoring log:', log);
       const requestBody = JSON.parse(log.request_body);
+      console.log('Parsed request body:', requestBody);
       const companyData = requestBody.deleted_company_data;
+      console.log('Company data:', companyData);
       
       if (!companyData) {
-        alert('Данные для восстановления не найдены');
+        alert('Данные для восстановления не найдены в логе. Возможно компания была удалена до обновления системы.');
+        setRestoringId(null);
         return;
       }
 
+      console.log('Sending restore request...');
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
@@ -95,16 +100,19 @@ export default function Index() {
         }),
       });
 
+      console.log('Response status:', response.status);
       const result = await response.json();
+      console.log('Response result:', result);
+      
       if (result.success) {
-        alert(`Компания восстановлена с ID: ${result.company_id}`);
+        alert(`✅ Компания восстановлена с новым ID: ${result.company_id}`);
         await fetchData();
       } else {
-        alert(`Ошибка восстановления: ${result.error}`);
+        alert(`❌ Ошибка восстановления: ${result.error || 'Неизвестная ошибка'}`);
       }
     } catch (error) {
       console.error('Error restoring company:', error);
-      alert('Ошибка при восстановлении компании');
+      alert('❌ Ошибка при восстановлении компании. Проверьте консоль браузера.');
     } finally {
       setRestoringId(null);
     }
