@@ -536,38 +536,47 @@ def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
         return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured', 'companies': []}
     
     try:
-        url = f"{bitrix_webhook.rstrip('/')}/crm.company.list.json"
-        params = {
-            'filter': {'RQ_INN': inn},
-            'select': ['ID', 'TITLE', 'DATE_CREATE']
-        }
+        # КРИТИЧНО: Получаем АКТИВНЫЕ компании, ищем через реквизиты
+        url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json"
         
-        data = urllib.parse.urlencode({'filter[RQ_INN]': inn, 'select[]': ['ID', 'TITLE', 'DATE_CREATE']}).encode('utf-8')
-        req = urllib.request.Request(url, data=data)
+        filter_params = urllib.parse.urlencode({
+            'filter[RQ_INN]': inn,
+            'filter[ENTITY_TYPE_ID]': '4'  # 4 = Company
+        })
         
-        with urllib.request.urlopen(req, timeout=10) as response:
+        req_url = f"{url}?{filter_params}"
+        print(f"[DEBUG] Searching requisites with INN {inn}: {req_url}")
+        
+        with urllib.request.urlopen(req_url, timeout=10) as response:
             result = json.loads(response.read().decode('utf-8'))
             
             if not result.get('result'):
-                return {'success': False, 'error': result.get('error_description', 'Unknown error'), 'companies': []}
+                return {'success': True, 'companies': []}  # Нет реквизитов = нет компаний
             
-            candidate_companies = result['result']
-            print(f"[DEBUG] crm.company.list found {len(candidate_companies)} candidates with INN {inn}")
+            requisites = result['result']
+            print(f"[DEBUG] Found {len(requisites)} requisites with INN {inn}")
+            
+            # Собираем уникальные ID компаний из реквизитов
+            company_ids = list(set([req.get('ENTITY_ID') for req in requisites if req.get('ENTITY_ID')]))
+            print(f"[DEBUG] Unique company IDs from requisites: {company_ids}")
             
             # КРИТИЧНО: Проверяем каждую компанию на реальное существование
             verified_companies = []
-            for company in candidate_companies:
-                company_id = company.get('ID')
-                
+            for company_id in company_ids:
                 # Проверяем существование компании через crm.company.get
                 check_result = get_bitrix_company(str(company_id))
-                if check_result.get('success'):
-                    verified_companies.append(company)
-                    print(f"[DEBUG] Company {company_id} VERIFIED (exists)")
+                if check_result.get('success') and check_result.get('company'):
+                    company_data = check_result['company']
+                    verified_companies.append({
+                        'ID': company_id,
+                        'TITLE': company_data.get('TITLE', 'N/A'),
+                        'DATE_CREATE': company_data.get('DATE_CREATE', 'N/A')
+                    })
+                    print(f"[DEBUG] Company {company_id} VERIFIED (exists and active)")
                 else:
                     print(f"[DEBUG] Company {company_id} SKIPPED (deleted or not found): {check_result.get('error')}")
             
-            print(f"[DEBUG] Verified {len(verified_companies)} out of {len(candidate_companies)} companies")
+            print(f"[DEBUG] Verified {len(verified_companies)} out of {len(company_ids)} companies")
             return {'success': True, 'companies': verified_companies}
     
     except Exception as e:
