@@ -1,0 +1,29 @@
+{
+  "tests": [
+    {
+      "name": "Check unique INN - first request",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "inn": "1234567890",
+        "bitrix_id": "TEST_001",
+        "title": "ООО Тестовая"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "inn": "1234567890"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get webhook logs and stats",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "stats": {}
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
