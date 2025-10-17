@@ -903,13 +903,13 @@ def response_json(status_code: int, data: Dict) -> Dict[str, Any]:
 def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
     '''
     Диагностирует проблемы с дубликатами ИНН:
-    1. Получает ВСЕ реквизиты с данным ИНН из Битрикс24 (все 45 строк)
-    2. Для каждого реквизита проверяет существование компании
-    3. Формирует единую таблицу со ВСЕМИ данными
+    1. Получает ВСЕ реквизиты с данным ИНН через API (все 45 строк)
+    2. Получает активные компании с ИНН
+    3. Объединяет данные: реквизиты + информация о компаниях
     '''
     result = {
         'inn': inn,
-        'bitrix_companies': [],  # Теперь содержит ВСЕ реквизиты с информацией о компании
+        'bitrix_companies': [],
         'requisites_in_db': [],
         'summary': {
             'total_bitrix': 0,
@@ -923,103 +923,98 @@ def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
         return result
     
     try:
-        # 1. Получаем ВСЕ реквизиты с данным ИНН (все поля включая RQ_NAME)
+        # 1. Получаем ВСЕ реквизиты с данным ИНН (включая RQ_NAME)
         params = urllib.parse.urlencode({
             'filter[RQ_INN]': inn,
-            'filter[ENTITY_TYPE_ID]': '4',  # Только компании
+            'filter[ENTITY_TYPE_ID]': '4',
         })
         url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json?{params}"
         
         print(f"[DEBUG] Fetching ALL requisites for INN {inn}")
         
-        with urllib.request.urlopen(url, timeout=15) as response:
+        all_requisites = []
+        with urllib.request.urlopen(url, timeout=10) as response:
             requisites_data = json.loads(response.read().decode('utf-8'))
             
-            if not requisites_data.get('result'):
-                return result
+            if requisites_data.get('result'):
+                all_requisites = requisites_data['result']
+                result['summary']['total_requisites'] = len(all_requisites)
+                print(f"[DEBUG] Found {len(all_requisites)} requisites in database")
+        
+        # 2. Получаем активные компании с ИНН через crm.company.list
+        params_dict = {
+            'filter[RQ_INN]': inn,
+        }
+        for field in ['ID', 'TITLE', 'DATE_CREATE', 'COMPANY_TYPE', 'PHONE', 'EMAIL']:
+            params_dict[f'select[]'] = field
+        
+        url = f"{bitrix_webhook.rstrip('/')}/crm.company.list.json"
+        data = urllib.parse.urlencode(params_dict).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        companies_map = {}
+        with urllib.request.urlopen(req, timeout=10) as response:
+            companies_result = json.loads(response.read().decode('utf-8'))
             
-            all_requisites = requisites_data['result']
-            result['summary']['total_requisites'] = len(all_requisites)
-            
-            print(f"[DEBUG] Found {len(all_requisites)} total requisites in database")
-            
-            # 2. Для КАЖДОГО реквизита проверяем существование компании
-            company_cache = {}  # Кэш для избежания повторных запросов
-            
-            for req in all_requisites:
-                entity_id = str(req.get('ENTITY_ID', ''))
-                requisite_id = req.get('ID', '')
-                
-                # Проверяем, есть ли компания в кэше
-                if entity_id not in company_cache:
-                    # Пытаемся получить компанию
-                    try:
-                        company_url = f"{bitrix_webhook.rstrip('/')}/crm.company.get.json?ID={entity_id}"
-                        with urllib.request.urlopen(company_url, timeout=5) as comp_response:
-                            company_data = json.loads(comp_response.read().decode('utf-8'))
-                            
-                            if company_data.get('result'):
-                                company = company_data['result']
-                                company_cache[entity_id] = {
-                                    'exists': True,
-                                    'data': company
-                                }
-                            else:
-                                company_cache[entity_id] = {'exists': False}
-                    except:
-                        company_cache[entity_id] = {'exists': False}
-                
-                # Формируем запись для таблицы
-                company_info = company_cache[entity_id]
-                company_exists = company_info.get('exists', False)
-                
-                phone_value = ''
-                email_value = ''
-                company_title = ''
-                date_create = ''
-                company_type = ''
-                
-                if company_exists and company_info.get('data'):
-                    company = company_info['data']
-                    company_title = company.get('TITLE', '')
-                    date_create = company.get('DATE_CREATE', '')
-                    company_type = company.get('COMPANY_TYPE', '')
+            if companies_result.get('result'):
+                for company in companies_result['result']:
+                    company_id = str(company['ID'])
                     
+                    phone_value = ''
                     if company.get('PHONE') and isinstance(company['PHONE'], list) and len(company['PHONE']) > 0:
                         phone_value = company['PHONE'][0].get('VALUE', '')
                     
+                    email_value = ''
                     if company.get('EMAIL') and isinstance(company['EMAIL'], list) and len(company['EMAIL']) > 0:
                         email_value = company['EMAIL'][0].get('VALUE', '')
+                    
+                    companies_map[company_id] = {
+                        'TITLE': company.get('TITLE', ''),
+                        'DATE_CREATE': company.get('DATE_CREATE', ''),
+                        'COMPANY_TYPE': company.get('COMPANY_TYPE', ''),
+                        'PHONE': phone_value,
+                        'EMAIL': email_value,
+                    }
                 
-                # Добавляем в результат
-                result['bitrix_companies'].append({
-                    'ID': entity_id,
-                    'REQUISITE_ID': requisite_id,
-                    'TITLE': company_title,
-                    'RQ_NAME': req.get('RQ_NAME', ''),  # Наименование из реквизитов
-                    'DATE_CREATE': date_create,
-                    'is_active': company_exists,
-                    'COMPANY_TYPE': company_type,
-                    'RQ_INN': req.get('RQ_INN', inn),
-                    'RQ_KPP': req.get('RQ_KPP', ''),
-                    'PHONE': phone_value,
-                    'EMAIL': email_value,
-                })
-                
-                # Также добавляем в список реквизитов
-                result['requisites_in_db'].append({
-                    'id': requisite_id,
-                    'entity_id': entity_id,
-                    'entity_type_id': req.get('ENTITY_TYPE_ID', ''),
-                    'inn': req.get('RQ_INN', ''),
-                    'company_exists': company_exists
-                })
-                
-                if not company_exists:
-                    result['summary']['orphaned_requisites'] += 1
+                print(f"[DEBUG] Found {len(companies_map)} active companies")
+        
+        # 3. Объединяем реквизиты и компании
+        active_company_ids = set(companies_map.keys())
+        
+        for req in all_requisites:
+            entity_id = str(req.get('ENTITY_ID', ''))
+            requisite_id = req.get('ID', '')
+            company_exists = entity_id in active_company_ids
             
-            result['summary']['total_bitrix'] = len(result['bitrix_companies'])
-            print(f"[DEBUG] Processed {len(result['bitrix_companies'])} requisites: {result['summary']['orphaned_requisites']} orphaned")
+            company_data = companies_map.get(entity_id, {})
+            
+            result['bitrix_companies'].append({
+                'ID': entity_id,
+                'REQUISITE_ID': requisite_id,
+                'TITLE': company_data.get('TITLE', ''),
+                'RQ_NAME': req.get('RQ_NAME', ''),
+                'DATE_CREATE': company_data.get('DATE_CREATE', ''),
+                'is_active': company_exists,
+                'COMPANY_TYPE': company_data.get('COMPANY_TYPE', ''),
+                'RQ_INN': req.get('RQ_INN', inn),
+                'RQ_KPP': req.get('RQ_KPP', ''),
+                'PHONE': company_data.get('PHONE', ''),
+                'EMAIL': company_data.get('EMAIL', ''),
+            })
+            
+            result['requisites_in_db'].append({
+                'id': requisite_id,
+                'entity_id': entity_id,
+                'entity_type_id': req.get('ENTITY_TYPE_ID', ''),
+                'inn': req.get('RQ_INN', ''),
+                'company_exists': company_exists
+            })
+            
+            if not company_exists:
+                result['summary']['orphaned_requisites'] += 1
+        
+        result['summary']['total_bitrix'] = len(active_company_ids)
+        print(f"[DEBUG] Result: {len(all_requisites)} requisites, {len(active_company_ids)} active companies, {result['summary']['orphaned_requisites']} orphaned")
     
     except Exception as e:
         print(f"[ERROR] Failed to diagnose INN: {e}")
