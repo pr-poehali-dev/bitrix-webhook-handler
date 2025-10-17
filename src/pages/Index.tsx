@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import StatsCards from '@/components/StatsCards';
@@ -7,6 +8,7 @@ import LogsTable from '@/components/LogsTable';
 import ApiDocumentation from '@/components/ApiDocumentation';
 import LogDetailsDialog from '@/components/LogDetailsDialog';
 import DiagnosticTools from '@/components/DiagnosticTools';
+import LoginForm from '@/components/LoginForm';
 
 interface WebhookLog {
   id: number;
@@ -37,12 +39,61 @@ export default function Index() {
   const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [restoringId, setRestoringId] = useState<number | null>(null);
+  
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
+    const authToken = localStorage.getItem('webhook_auth_token');
+    if (authToken) {
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchData();
+      const interval = setInterval(fetchData, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = async (username: string, password: string) => {
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'login',
+          username,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        localStorage.setItem('webhook_auth_token', data.token);
+        setIsAuthenticated(true);
+      } else {
+        setAuthError(data.error || 'Неверный логин или пароль');
+      }
+    } catch (error) {
+      setAuthError('Ошибка подключения к серверу');
+      console.error('Login error:', error);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('webhook_auth_token');
+    setIsAuthenticated(false);
+  };
 
   const fetchData = async () => {
     try {
@@ -141,17 +192,27 @@ export default function Index() {
     return <Badge variant="secondary">{status}</Badge>;
   };
 
+  if (!isAuthenticated) {
+    return <LoginForm onLogin={handleLogin} error={authError} loading={authLoading} />;
+  }
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Icon name="Webhook" size={32} className="text-primary" />
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Icon name="Webhook" size={32} className="text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Битрикс24 Webhook Monitor</h1>
+              <p className="text-muted-foreground">Мониторинг вебхуков и проверка дубликатов ИНН</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Битрикс24 Webhook Monitor</h1>
-            <p className="text-muted-foreground">Мониторинг вебхуков и проверка дубликатов ИНН</p>
-          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <Icon name="LogOut" size={16} className="mr-2" />
+            Выход
+          </Button>
         </div>
 
         <StatsCards stats={stats} />

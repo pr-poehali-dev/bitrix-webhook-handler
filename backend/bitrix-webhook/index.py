@@ -68,10 +68,34 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             body_data = json.loads(body_str)
             bitrix_id: str = body_data.get('bitrix_id', '').strip()
             
-            # Проверяем, если это запрос на восстановление компании
+            # Проверяем, если это запрос на авторизацию
             action = body_data.get('action', '')
             print(f"[DEBUG] POST body_data: {body_data}")
             print(f"[DEBUG] action: {action}")
+            
+            if action == 'login':
+                username = body_data.get('username', '').strip()
+                password = body_data.get('password', '').strip()
+                
+                # КРИТИЧНО: Получаем логин/пароль из секретов
+                admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
+                admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+                
+                if username == admin_username and password == admin_password:
+                    import hashlib
+                    import time
+                    token = hashlib.sha256(f"{username}{time.time()}".encode()).hexdigest()
+                    
+                    return response_json(200, {
+                        'success': True,
+                        'token': token,
+                        'message': 'Авторизация успешна'
+                    })
+                else:
+                    return response_json(401, {
+                        'success': False,
+                        'error': 'Неверный логин или пароль'
+                    })
             
             if action == 'restore':
                 original_data = body_data.get('original_data', {})
