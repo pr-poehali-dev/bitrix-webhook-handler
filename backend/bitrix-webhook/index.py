@@ -67,6 +67,29 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 body_str = '{}'
             body_data = json.loads(body_str)
             bitrix_id: str = body_data.get('bitrix_id', '').strip()
+            
+            # Проверяем, если это запрос на восстановление компании
+            restore_action = body_data.get('action', '')
+            if restore_action == 'restore':
+                original_data = body_data.get('original_data', {})
+                restore_result = restore_deleted_company(original_data)
+                
+                if restore_result.get('success'):
+                    log_webhook(cur, 'restore_company', original_data.get('inn', ''), restore_result.get('company_id', ''), body_data, 'success', False, f"Company restored: {restore_result.get('company_id')}", source_info, method)
+                    conn.commit()
+                    return response_json(200, {
+                        'success': True,
+                        'message': 'Company restored successfully',
+                        'company_id': restore_result.get('company_id')
+                    })
+                else:
+                    log_webhook(cur, 'restore_company', original_data.get('inn', ''), '', body_data, 'error', False, f"Failed to restore: {restore_result.get('error')}", source_info, method)
+                    conn.commit()
+                    return response_json(400, {
+                        'success': False,
+                        'error': restore_result.get('error')
+                    })
+            
         elif method == 'GET':
             query_params = event.get('queryStringParameters', {}) or {}
             bitrix_id: str = query_params.get('bitrix_id', query_params.get('id', '')).strip()
@@ -156,6 +179,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 action_taken = f"Duplicate INN found in Bitrix24. Existing company: {old_company_id}"
                 deleted = False
                 
+                # Сохраняем данные компании перед удалением
+                company_backup = {
+                    'bitrix_id': bitrix_id,
+                    'inn': inn,
+                    'TITLE': title,
+                    'RQ_INN': inn,
+                    'ASSIGNED_BY_ID': company_info.get('ASSIGNED_BY_ID'),
+                    'PHONE': company_info.get('PHONE', [{}])[0].get('VALUE') if company_info.get('PHONE') else None,
+                    'EMAIL': company_info.get('EMAIL', [{}])[0].get('VALUE') if company_info.get('EMAIL') else None,
+                }
+                
                 delete_result = delete_bitrix_company(bitrix_id)
                 if delete_result.get('success'):
                     action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company_id})"
@@ -163,7 +197,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
                 
-                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken, source_info, method)
+                # Сохраняем данные для восстановления в request_body
+                body_data_with_backup = body_data.copy()
+                body_data_with_backup['deleted_company_data'] = company_backup
+                
+                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data_with_backup, 'duplicate_found', True, action_taken, source_info, method)
                 conn.commit()
                 
                 return response_json(200, {
@@ -174,7 +212,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'bitrix_companies': bitrix_companies,
                     'action': 'deleted' if deleted else 'delete_failed',
                     'deleted': deleted,
-                    'message': action_taken
+                    'message': action_taken,
+                    'company_backup': company_backup
                 })
         
         cur.execute(
@@ -403,6 +442,48 @@ def send_notification_to_user(user_id: str, message: str, company_id: str, compa
     
     except Exception as e:
         print(f"[DEBUG] Exception sending notification: {type(e).__name__}: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
+    
+    try:
+        # Создаём компанию заново с теми же данными
+        url = f"{bitrix_webhook.rstrip('/')}/crm.company.add.json"
+        
+        fields = {
+            'fields[TITLE]': company_data.get('TITLE', 'Восстановленная компания'),
+            'fields[RQ_INN]': company_data.get('RQ_INN', company_data.get('inn', '')),
+        }
+        
+        # Добавляем дополнительные поля если есть
+        if company_data.get('ASSIGNED_BY_ID'):
+            fields['fields[ASSIGNED_BY_ID]'] = company_data['ASSIGNED_BY_ID']
+        if company_data.get('PHONE'):
+            fields['fields[PHONE][0][VALUE]'] = company_data['PHONE']
+        if company_data.get('EMAIL'):
+            fields['fields[EMAIL][0][VALUE]'] = company_data['EMAIL']
+        
+        data = urllib.parse.urlencode(fields).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            
+            if result.get('result'):
+                new_company_id = result['result']
+                print(f"[DEBUG] Company restored with new ID: {new_company_id}")
+                return {'success': True, 'company_id': str(new_company_id)}
+            else:
+                error_msg = result.get('error_description', result.get('error', 'Unknown error'))
+                print(f"[DEBUG] Restore error: {error_msg}")
+                return {'success': False, 'error': error_msg}
+    
+    except Exception as e:
+        print(f"[DEBUG] Exception restoring company: {type(e).__name__}: {str(e)}")
         return {'success': False, 'error': str(e)}
 
 def delete_bitrix_company(company_id: str) -> Dict[str, Any]:

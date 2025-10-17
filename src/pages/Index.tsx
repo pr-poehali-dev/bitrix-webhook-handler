@@ -36,6 +36,7 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -69,6 +70,43 @@ export default function Index() {
       console.error('Error clearing logs:', error);
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  const restoreCompany = async (log: WebhookLog) => {
+    setRestoringId(log.id);
+    try {
+      const requestBody = JSON.parse(log.request_body);
+      const companyData = requestBody.deleted_company_data;
+      
+      if (!companyData) {
+        alert('Данные для восстановления не найдены');
+        return;
+      }
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'restore',
+          original_data: companyData,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert(`Компания восстановлена с ID: ${result.company_id}`);
+        await fetchData();
+      } else {
+        alert(`Ошибка восстановления: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error restoring company:', error);
+      alert('Ошибка при восстановлении компании');
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -202,34 +240,76 @@ export default function Index() {
                           <TableHead className="text-muted-foreground">ID компании</TableHead>
                           <TableHead className="text-muted-foreground">Статус</TableHead>
                           <TableHead className="text-muted-foreground">Действие</TableHead>
+                          <TableHead className="text-muted-foreground w-[120px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {logs.map((log) => (
-                          <TableRow 
-                            key={log.id} 
-                            className="border-border cursor-pointer hover:bg-secondary/50 transition-colors"
-                            onClick={() => setSelectedLog(log)}
-                          >
-                            <TableCell className="text-foreground font-mono text-sm">
-                              {formatDate(log.created_at)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={log.request_method === 'GET' ? 'outline' : 'secondary'} className="font-mono text-xs">
-                                {log.request_method || 'POST'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-xs max-w-[200px] truncate" title={log.source_info}>
-                              {log.source_info || 'Unknown'}
-                            </TableCell>
-                            <TableCell className="font-semibold text-primary">{log.inn}</TableCell>
-                            <TableCell className="text-muted-foreground">{log.bitrix_company_id}</TableCell>
-                            <TableCell>{getStatusBadge(log.response_status, log.duplicate_found)}</TableCell>
-                            <TableCell className="text-muted-foreground text-sm max-w-xs truncate">
-                              {log.action_taken}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {logs.map((log) => {
+                          const canRestore = log.duplicate_found && log.action_taken.includes('Auto-deleted');
+                          
+                          return (
+                            <TableRow key={log.id} className="border-border">
+                              <TableCell 
+                                className="text-foreground font-mono text-sm cursor-pointer hover:bg-secondary/50"
+                                onClick={() => setSelectedLog(log)}
+                              >
+                                {formatDate(log.created_at)}
+                              </TableCell>
+                              <TableCell
+                                className="cursor-pointer hover:bg-secondary/50"
+                                onClick={() => setSelectedLog(log)}
+                              >
+                                <Badge variant={log.request_method === 'GET' ? 'outline' : 'secondary'} className="font-mono text-xs">
+                                  {log.request_method || 'POST'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell 
+                                className="text-muted-foreground text-xs max-w-[200px] truncate cursor-pointer hover:bg-secondary/50" 
+                                title={log.source_info}
+                                onClick={() => setSelectedLog(log)}
+                              >
+                                {log.source_info || 'Unknown'}
+                              </TableCell>
+                              <TableCell 
+                                className="font-semibold text-primary cursor-pointer hover:bg-secondary/50"
+                                onClick={() => setSelectedLog(log)}
+                              >
+                                {log.inn}
+                              </TableCell>
+                              <TableCell 
+                                className="text-muted-foreground cursor-pointer hover:bg-secondary/50"
+                                onClick={() => setSelectedLog(log)}
+                              >
+                                {log.bitrix_company_id}
+                              </TableCell>
+                              <TableCell
+                                className="cursor-pointer hover:bg-secondary/50"
+                                onClick={() => setSelectedLog(log)}
+                              >
+                                {getStatusBadge(log.response_status, log.duplicate_found)}
+                              </TableCell>
+                              <TableCell 
+                                className="text-muted-foreground text-sm max-w-xs truncate cursor-pointer hover:bg-secondary/50"
+                                onClick={() => setSelectedLog(log)}
+                              >
+                                {log.action_taken}
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                {canRestore && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => restoreCompany(log)}
+                                    disabled={restoringId === log.id}
+                                  >
+                                    <Icon name="Undo2" size={14} className="mr-1" />
+                                    {restoringId === log.id ? 'Восстановление...' : 'Отменить'}
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
