@@ -69,11 +69,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             bitrix_id: str = body_data.get('bitrix_id', '').strip()
             
             # Проверяем, если это запрос на восстановление компании
-            restore_action = body_data.get('action', '')
+            action = body_data.get('action', '')
             print(f"[DEBUG] POST body_data: {body_data}")
-            print(f"[DEBUG] restore_action: {restore_action}")
+            print(f"[DEBUG] action: {action}")
             
-            if restore_action == 'restore':
+            if action == 'restore':
                 original_data = body_data.get('original_data', {})
                 print(f"[DEBUG] Restoring company with data: {original_data}")
                 restore_result = restore_deleted_company(original_data)
@@ -95,8 +95,38 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'error': restore_result.get('error')
                     })
             
+            # Проверяем, если это запрос на очистку мусорных реквизитов
+            if action == 'clean_orphans':
+                inn_to_clean = body_data.get('inn', '').strip()
+                if not inn_to_clean:
+                    return response_json(400, {'success': False, 'error': 'ИНН не указан'})
+                
+                clean_result = clean_orphaned_requisites(inn_to_clean)
+                log_webhook(cur, 'clean_orphans', inn_to_clean, '', body_data, 'success', False, f"Cleaned {clean_result.get('cleaned_count', 0)} orphaned requisites", source_info, method)
+                conn.commit()
+                
+                return response_json(200, {
+                    'success': True,
+                    'cleaned_count': clean_result.get('cleaned_count', 0),
+                    'message': f"Удалено {clean_result.get('cleaned_count', 0)} мусорных реквизитов"
+                })
+            
         elif method == 'GET':
             query_params = event.get('queryStringParameters', {}) or {}
+            
+            # Проверяем, если это запрос на диагностику
+            action = query_params.get('action', '')
+            if action == 'diagnose':
+                inn_to_check = query_params.get('inn', '').strip()
+                if not inn_to_check:
+                    return response_json(400, {'success': False, 'error': 'ИНН не указан'})
+                
+                diagnostic_result = diagnose_inn_duplicates(inn_to_check, cur)
+                return response_json(200, {
+                    'success': True,
+                    'result': diagnostic_result
+                })
+            
             bitrix_id: str = query_params.get('bitrix_id', query_params.get('id', '')).strip()
             body_data = {'bitrix_id': bitrix_id, 'method': 'GET'}
         else:
@@ -803,3 +833,140 @@ def response_json(status_code: int, data: Dict) -> Dict[str, Any]:
         'isBase64Encoded': False,
         'body': json.dumps(data, ensure_ascii=False)
     }
+
+def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
+    '''
+    Диагностирует проблемы с дубликатами ИНН:
+    1. Ищет активные компании в Битрикс24 через API
+    2. Ищет реквизиты в базе данных Битрикс24
+    3. Сравнивает результаты и находит "мусорные" реквизиты
+    '''
+    result = {
+        'inn': inn,
+        'bitrix_companies': [],
+        'requisites_in_db': [],
+        'summary': {
+            'total_bitrix': 0,
+            'total_requisites': 0,
+            'orphaned_requisites': 0
+        }
+    }
+    
+    # 1. Ищем активные компании через API Битрикс24
+    search_result = find_duplicate_companies_by_inn(inn)
+    if search_result.get('success') and search_result.get('companies'):
+        result['bitrix_companies'] = search_result['companies']
+        result['summary']['total_bitrix'] = len(search_result['companies'])
+    
+    # 2. Ищем реквизиты в базе данных Битрикс24 напрямую
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    if not bitrix_webhook:
+        return result
+    
+    try:
+        # Ищем реквизиты через REST API (т.к. прямого доступа к БД Битрикс нет)
+        # Используем поиск по всем реквизитам компаний
+        params = urllib.parse.urlencode({
+            'filter[RQ_INN]': inn,
+            'select[]': ['ID', 'ENTITY_ID', 'ENTITY_TYPE_ID', 'RQ_INN']
+        })
+        url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json?{params}"
+        
+        with urllib.request.urlopen(url, timeout=10) as response:
+            requisites_data = json.loads(response.read().decode('utf-8'))
+            
+            if requisites_data.get('result'):
+                requisites = requisites_data['result']
+                result['summary']['total_requisites'] = len(requisites)
+                
+                # Получаем ID активных компаний для сравнения
+                active_company_ids = {str(c['ID']) for c in result['bitrix_companies']}
+                
+                # Проверяем каждый реквизит
+                for req in requisites:
+                    entity_id = str(req.get('ENTITY_ID', ''))
+                    company_exists = entity_id in active_company_ids
+                    
+                    result['requisites_in_db'].append({
+                        'id': req.get('ID', ''),
+                        'entity_id': entity_id,
+                        'entity_type_id': req.get('ENTITY_TYPE_ID', ''),
+                        'inn': req.get('RQ_INN', ''),
+                        'company_exists': company_exists
+                    })
+                    
+                    if not company_exists:
+                        result['summary']['orphaned_requisites'] += 1
+    
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch requisites from Bitrix24: {e}")
+    
+    return result
+
+def clean_orphaned_requisites(inn: str) -> Dict[str, Any]:
+    '''
+    Удаляет мусорные реквизиты (не привязанные к активным компаниям) через REST API Битрикс24
+    '''
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    if not bitrix_webhook:
+        return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured', 'cleaned_count': 0}
+    
+    cleaned_count = 0
+    
+    try:
+        # 1. Получаем все реквизиты с данным ИНН
+        params = urllib.parse.urlencode({
+            'filter[RQ_INN]': inn,
+            'select[]': ['ID', 'ENTITY_ID', 'ENTITY_TYPE_ID']
+        })
+        url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json?{params}"
+        
+        with urllib.request.urlopen(url, timeout=10) as response:
+            requisites_data = json.loads(response.read().decode('utf-8'))
+            
+            if not requisites_data.get('result'):
+                return {'success': True, 'cleaned_count': 0, 'message': 'No requisites found'}
+            
+            requisites = requisites_data['result']
+        
+        # 2. Получаем активные компании с таким ИНН
+        active_companies_result = find_duplicate_companies_by_inn(inn)
+        active_company_ids = set()
+        if active_companies_result.get('success') and active_companies_result.get('companies'):
+            active_company_ids = {str(c['ID']) for c in active_companies_result['companies']}
+        
+        # 3. Удаляем реквизиты, не привязанные к активным компаниям
+        for req in requisites:
+            entity_id = str(req.get('ENTITY_ID', ''))
+            
+            # Если компания не существует - удаляем реквизит
+            if entity_id not in active_company_ids:
+                req_id = req.get('ID')
+                print(f"[DEBUG] Deleting orphaned requisite {req_id} (company {entity_id} not found)")
+                
+                delete_url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.delete.json"
+                delete_data = urllib.parse.urlencode({'id': req_id}).encode('utf-8')
+                delete_req = urllib.request.Request(delete_url, data=delete_data)
+                
+                try:
+                    with urllib.request.urlopen(delete_req, timeout=10) as delete_response:
+                        delete_result = json.loads(delete_response.read().decode('utf-8'))
+                        if delete_result.get('result'):
+                            cleaned_count += 1
+                            print(f"[DEBUG] Successfully deleted requisite {req_id}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to delete requisite {req_id}: {e}")
+        
+        return {
+            'success': True,
+            'cleaned_count': cleaned_count,
+            'message': f'Cleaned {cleaned_count} orphaned requisites'
+        }
+    
+    except Exception as e:
+        print(f"[ERROR] Failed to clean orphaned requisites: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'cleaned_count': cleaned_count
+        }

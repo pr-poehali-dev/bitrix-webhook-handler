@@ -6,6 +6,7 @@ import StatsCards from '@/components/StatsCards';
 import LogsTable from '@/components/LogsTable';
 import ApiDocumentation from '@/components/ApiDocumentation';
 import LogDetailsDialog from '@/components/LogDetailsDialog';
+import DiagnosticTools from '@/components/DiagnosticTools';
 
 interface WebhookLog {
   id: number;
@@ -156,10 +157,14 @@ export default function Index() {
         <StatsCards stats={stats} />
 
         <Tabs defaultValue="logs" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 bg-secondary">
+          <TabsList className="grid w-full max-w-2xl grid-cols-3 bg-secondary">
             <TabsTrigger value="logs" className="data-[state=active]:bg-primary">
               <Icon name="FileText" size={16} className="mr-2" />
               Журнал вебхуков
+            </TabsTrigger>
+            <TabsTrigger value="diagnostic" className="data-[state=active]:bg-primary">
+              <Icon name="Wrench" size={16} className="mr-2" />
+              Диагностика
             </TabsTrigger>
             <TabsTrigger value="api" className="data-[state=active]:bg-primary">
               <Icon name="Code" size={16} className="mr-2" />
@@ -179,6 +184,10 @@ export default function Index() {
               formatDate={formatDate}
               getStatusBadge={getStatusBadge}
             />
+          </TabsContent>
+
+          <TabsContent value="diagnostic" className="mt-6">
+            <DiagnosticTools apiUrl={API_URL} />
           </TabsContent>
 
           <TabsContent value="api" className="mt-6">
