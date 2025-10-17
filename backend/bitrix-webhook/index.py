@@ -175,6 +175,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         search_result = find_duplicate_companies_by_inn(inn)
         
+        # Подробная информация о поиске для отображения в дашборде
+        search_details = {
+            'search_success': search_result.get('success'),
+            'total_found': len(search_result.get('companies', [])),
+            'found_companies': search_result.get('companies', []),
+            'search_method': 'crm.company.list with filter[RQ_INN]',
+            'inn_searched': inn
+        }
+        
         if search_result.get('success') and len(search_result.get('companies', [])) > 0:
             bitrix_companies = search_result['companies']
             
@@ -186,6 +195,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Сравниваем как строки, т.к. ID из Битрикс может быть строкой
             existing_ids = [c['ID'] for c in bitrix_companies if str(c['ID']) != str(bitrix_id)]
             
+            search_details['other_companies_count'] = len(existing_ids)
+            search_details['other_companies_ids'] = existing_ids
+            search_details['current_company_id'] = bitrix_id
+            search_details['comparison_details'] = {
+                'bitrix_id': bitrix_id,
+                'bitrix_id_type': str(type(bitrix_id).__name__),
+                'found_ids_with_types': [{'id': c['ID'], 'type': str(type(c['ID']).__name__), 'title': c.get('TITLE', 'N/A')} for c in bitrix_companies]
+            }
+            
             print(f"[DEBUG] Other company IDs (excluding current): {existing_ids}")
             print(f"[DEBUG] Total companies found: {len(bitrix_companies)}, Others: {len(existing_ids)}")
             print(f"[DEBUG] Comparison: bitrix_id={bitrix_id} (type: {type(bitrix_id)})")
@@ -195,8 +213,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if len(existing_ids) == 0:
                 # Найдена только текущая компания - НЕ дубликат
                 action_msg = f"Only current company {bitrix_id} found with INN {inn}, not a duplicate (total: {len(bitrix_companies)})"
+                action_msg += f" | Search details: {json.dumps(search_details, ensure_ascii=False)}"
                 print(f"[DEBUG] {action_msg}")
-                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'success', False, action_msg, source_info, method)
+                
+                # Добавляем детали поиска в request_body для отображения в дашборде
+                body_data_with_search = body_data.copy()
+                body_data_with_search['search_details'] = search_details
+                
+                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data_with_search, 'success', False, action_msg, source_info, method)
                 
                 cur.execute(
                     "INSERT INTO companies (bitrix_id, inn, title) VALUES (%s, %s, %s) ON CONFLICT (bitrix_id) DO UPDATE SET inn = EXCLUDED.inn, title = EXCLUDED.title, updated_at = CURRENT_TIMESTAMP",
@@ -213,10 +237,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             # Найдены другие компании с таким же ИНН - это дубликат
             old_company_id = existing_ids[0]
-            action_taken = f"Duplicate INN found in Bitrix24. Existing company: {old_company_id}"
+            other_companies_info = [{'id': c['ID'], 'title': c.get('TITLE', 'N/A'), 'date_create': c.get('DATE_CREATE', 'N/A')} 
+                                   for c in bitrix_companies if str(c['ID']) != str(bitrix_id)]
+            
+            action_taken = f"Duplicate INN found! Existing: {old_company_id} | Other companies: {json.dumps(other_companies_info, ensure_ascii=False)}"
             deleted = False
             
+            search_details['duplicate_detected'] = True
+            search_details['existing_company_id'] = old_company_id
+            search_details['other_companies_full'] = other_companies_info
+            
             print(f"[DEBUG] Duplicate detected! Current: {bitrix_id}, Existing: {old_company_id}")
+            print(f"[DEBUG] Other companies: {other_companies_info}")
             
             # КРИТИЧНО: Сохраняем ПОЛНЫЙ объект компании со ВСЕМИ полями
             # company_info уже содержит ВСЕ поля + дела (добавлены в get_bitrix_company)

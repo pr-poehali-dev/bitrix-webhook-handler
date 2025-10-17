@@ -440,9 +440,85 @@ export default function Index() {
                 <p className="text-sm">{selectedLog.action_taken}</p>
               </div>
 
+              {(() => {
+                try {
+                  const requestBody = JSON.parse(selectedLog.request_body);
+                  const searchDetails = requestBody.search_details;
+                  
+                  if (searchDetails) {
+                    return (
+                      <div className="space-y-2 p-4 bg-accent/10 border border-accent/20 rounded-md">
+                        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                          <Icon name="Search" size={16} />
+                          Результаты поиска дубликатов
+                        </p>
+                        <div className="space-y-2 text-xs">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <span className="font-semibold text-muted-foreground">ИНН для поиска:</span>
+                              <p className="font-mono text-primary">{searchDetails.inn_searched}</p>
+                            </div>
+                            <div>
+                              <span className="font-semibold text-muted-foreground">Всего найдено:</span>
+                              <p className="font-mono">{searchDetails.total_found} компаний</p>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <span className="font-semibold text-muted-foreground">Метод поиска:</span>
+                            <p className="font-mono text-xs text-muted-foreground">{searchDetails.search_method}</p>
+                          </div>
+                          
+                          {searchDetails.found_companies && searchDetails.found_companies.length > 0 && (
+                            <div className="mt-3">
+                              <p className="font-semibold text-muted-foreground mb-2">Найденные компании в Битрикс24:</p>
+                              <div className="space-y-1">
+                                {searchDetails.found_companies.map((company: any, idx: number) => (
+                                  <div key={idx} className="p-2 bg-secondary rounded text-xs flex items-center justify-between">
+                                    <div>
+                                      <span className="font-mono font-semibold">ID: {company.ID}</span>
+                                      {company.TITLE && <span className="ml-2 text-muted-foreground">— {company.TITLE}</span>}
+                                    </div>
+                                    {String(company.ID) === String(searchDetails.current_company_id) && (
+                                      <Badge variant="outline" className="text-xs">Текущая</Badge>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {searchDetails.comparison_details && (
+                            <div className="mt-3 p-2 bg-secondary/50 rounded">
+                              <p className="font-semibold text-muted-foreground mb-1">Детали сравнения ID:</p>
+                              <div className="space-y-1 text-xs">
+                                <p>Текущая компания: <span className="font-mono">{searchDetails.comparison_details.bitrix_id}</span> ({searchDetails.comparison_details.bitrix_id_type})</p>
+                                {searchDetails.comparison_details.found_ids_with_types && (
+                                  <div>
+                                    <p className="text-muted-foreground mt-1">Найденные ID с типами:</p>
+                                    {searchDetails.comparison_details.found_ids_with_types.map((item: any, idx: number) => (
+                                      <p key={idx} className="ml-2 font-mono">
+                                        {item.id} ({item.type}) — {item.title}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                } catch (e) {
+                  console.error('Error parsing search details:', e);
+                }
+                return null;
+              })()}
+
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground">Тело запроса</p>
-                <pre className="text-xs bg-secondary p-3 rounded overflow-x-auto">
+                <p className="text-sm font-semibold text-muted-foreground">Тело запроса (полное)</p>
+                <pre className="text-xs bg-secondary p-3 rounded overflow-x-auto max-h-[300px]">
                   {JSON.stringify(JSON.parse(selectedLog.request_body), null, 2)}
                 </pre>
               </div>
