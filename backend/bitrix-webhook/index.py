@@ -165,11 +165,20 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
         
         with urllib.request.urlopen(url, timeout=10) as response:
             response_text = response.read().decode('utf-8')
-            print(f"[DEBUG] Bitrix24 response: {response_text}")
+            print(f"[DEBUG] Bitrix24 company response: {response_text[:500]}")
             result = json.loads(response_text)
             
             if result.get('result'):
-                return {'success': True, 'company': result['result']}
+                company = result['result']
+                inn = company.get('RQ_INN', '').strip()
+                
+                if not inn:
+                    print(f"[DEBUG] No INN in company fields, checking requisites...")
+                    inn = get_company_inn_from_requisites(company_id)
+                    print(f"[DEBUG] INN from requisites: {inn}")
+                    company['RQ_INN'] = inn
+                
+                return {'success': True, 'company': company}
             else:
                 error_msg = result.get('error_description', result.get('error', 'Company not found'))
                 print(f"[DEBUG] Bitrix24 error: {error_msg}")
@@ -182,6 +191,37 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"[DEBUG] Exception: {type(e).__name__}: {str(e)}")
         return {'success': False, 'error': str(e)}
+
+def get_company_inn_from_requisites(company_id: str) -> str:
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        return ''
+    
+    try:
+        params = urllib.parse.urlencode({
+            'filter': {'ENTITY_ID': company_id, 'ENTITY_TYPE_ID': '4'}
+        })
+        url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json?{params}"
+        print(f"[DEBUG] Requesting requisites: {url}")
+        
+        with urllib.request.urlopen(url, timeout=10) as response:
+            response_text = response.read().decode('utf-8')
+            print(f"[DEBUG] Requisites response: {response_text[:500]}")
+            result = json.loads(response_text)
+            
+            if result.get('result'):
+                requisites = result['result']
+                for req in requisites:
+                    inn = req.get('RQ_INN', '').strip()
+                    if inn:
+                        return inn
+        
+        return ''
+    
+    except Exception as e:
+        print(f"[DEBUG] Error getting requisites: {type(e).__name__}: {str(e)}")
+        return ''
 
 def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
