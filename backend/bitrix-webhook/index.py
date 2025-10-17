@@ -199,21 +199,25 @@ def get_company_inn_from_requisites(company_id: str) -> str:
         return ''
     
     try:
-        params = urllib.parse.urlencode({
-            'filter': {'ENTITY_ID': company_id, 'ENTITY_TYPE_ID': '4'}
-        })
+        params_dict = {
+            'filter[ENTITY_ID]': company_id,
+            'filter[ENTITY_TYPE_ID]': '4'
+        }
+        params = urllib.parse.urlencode(params_dict)
         url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json?{params}"
         print(f"[DEBUG] Requesting requisites: {url}")
         
         with urllib.request.urlopen(url, timeout=10) as response:
             response_text = response.read().decode('utf-8')
-            print(f"[DEBUG] Requisites response: {response_text[:500]}")
+            print(f"[DEBUG] Requisites response: {response_text[:1000]}")
             result = json.loads(response_text)
             
             if result.get('result'):
                 requisites = result['result']
+                print(f"[DEBUG] Found {len(requisites)} requisites")
                 for req in requisites:
                     inn = req.get('RQ_INN', '').strip()
+                    print(f"[DEBUG] Requisite ID={req.get('ID')}, RQ_INN={inn}")
                     if inn:
                         return inn
         
