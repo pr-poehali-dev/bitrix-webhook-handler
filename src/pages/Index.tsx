@@ -16,6 +16,7 @@ interface WebhookLog {
   action_taken: string;
   created_at: string;
   source_info: string;
+  request_method: string;
 }
 
 interface Stats {
@@ -149,6 +150,7 @@ export default function Index() {
                       <TableHeader>
                         <TableRow className="border-border">
                           <TableHead className="text-muted-foreground">Дата и время</TableHead>
+                          <TableHead className="text-muted-foreground">Метод</TableHead>
                           <TableHead className="text-muted-foreground">Источник</TableHead>
                           <TableHead className="text-muted-foreground">ИНН</TableHead>
                           <TableHead className="text-muted-foreground">ID компании</TableHead>
@@ -161,6 +163,11 @@ export default function Index() {
                           <TableRow key={log.id} className="border-border">
                             <TableCell className="text-foreground font-mono text-sm">
                               {formatDate(log.created_at)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={log.request_method === 'GET' ? 'outline' : 'secondary'} className="font-mono text-xs">
+                                {log.request_method || 'POST'}
+                              </Badge>
                             </TableCell>
                             <TableCell className="text-muted-foreground text-xs max-w-[200px] truncate" title={log.source_info}>
                               {log.source_info || 'Unknown'}

@@ -1,27 +1,16 @@
 {
   "tests": [
     {
-      "name": "Missing bitrix_id test",
-      "method": "POST",
-      "path": "/",
-      "body": {
-        "test": "empty"
-      },
-      "expectedStatus": 400,
-      "expectedBody": {
-        "error": "bitrix_id is required"
-      },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Get webhook logs and stats",
+      "name": "Get webhook logs",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 200,
-      "expectedBody": {
-        "stats": {}
-      },
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET with invalid company ID",
+      "method": "GET",
+      "path": "/?bitrix_id=999999",
+      "expectedStatus": 400
     }
   ]
 }

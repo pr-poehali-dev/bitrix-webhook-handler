@@ -74,7 +74,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         if not company_data.get('success'):
             error_msg = f"Failed to get company data: {company_data.get('error')}"
-            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, error_msg, source_info)
+            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, error_msg, source_info, method)
             conn.commit()
             return response_json(400, {'error': error_msg})
         
@@ -83,7 +83,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         title: str = company_info.get('TITLE', '')
         
         if not inn:
-            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Company has no INN', source_info)
+            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Company has no INN', source_info, method)
             conn.commit()
             return response_json(200, {'duplicate': False, 'message': 'Company has no INN, skipping check'})
         
@@ -106,7 +106,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
                 
-                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken, source_info)
+                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken, source_info, method)
                 conn.commit()
                 
                 return response_json(200, {
@@ -125,7 +125,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             (bitrix_id, inn, title)
         )
         
-        log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'success', False, 'No duplicate, company saved', source_info)
+        log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'success', False, 'No duplicate, company saved', source_info, method)
         conn.commit()
         
         return response_json(200, {
@@ -141,10 +141,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     return response_json(405, {'error': 'Method not allowed'})
 
-def log_webhook(cur, webhook_type: str, inn: str, bitrix_id: str, request_body: Dict, status: str, duplicate: bool, action: str, source_info: str = ''):
+def log_webhook(cur, webhook_type: str, inn: str, bitrix_id: str, request_body: Dict, status: str, duplicate: bool, action: str, source_info: str = '', method: str = 'POST'):
     cur.execute(
-        "INSERT INTO webhook_logs (webhook_type, inn, bitrix_company_id, request_body, response_status, duplicate_found, action_taken, source_info) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-        (webhook_type, inn, bitrix_id, json.dumps(request_body), status, duplicate, action, source_info)
+        "INSERT INTO webhook_logs (webhook_type, inn, bitrix_company_id, request_body, response_status, duplicate_found, action_taken, source_info, request_method) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        (webhook_type, inn, bitrix_id, json.dumps(request_body), status, duplicate, action, source_info, method)
     )
 
 def serialize_log(log: Dict) -> Dict:

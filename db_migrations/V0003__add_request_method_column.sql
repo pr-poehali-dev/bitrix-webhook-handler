@@ -1,0 +1,1 @@
+ALTER TABLE webhook_logs ADD COLUMN request_method VARCHAR(10) DEFAULT 'POST';
