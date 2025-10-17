@@ -116,15 +116,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             cur.execute("""
                 SELECT 
-                    COUNT(*) as total_requests,
-                    SUM(CASE WHEN duplicate_found = true THEN 1 ELSE 0 END) as duplicates_found,
-                    SUM(CASE WHEN response_status = 'success' THEN 1 ELSE 0 END) as successful
+                    COALESCE(COUNT(*), 0) as total_requests,
+                    COALESCE(SUM(CASE WHEN duplicate_found = true THEN 1 ELSE 0 END), 0) as duplicates_found,
+                    COALESCE(SUM(CASE WHEN response_status = 'success' THEN 1 ELSE 0 END), 0) as successful
                 FROM webhook_logs
             """)
-            stats = cur.fetchone()
+            stats_row = cur.fetchone()
+            stats = dict(stats_row) if stats_row else {'total_requests': 0, 'duplicates_found': 0, 'successful': 0}
             
             return response_json(200, {
-                'logs': [serialize_log(log) for log in logs],
+                'logs': [serialize_log(log) for log in logs] if logs else [],
                 'stats': stats
             })
     
