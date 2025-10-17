@@ -324,6 +324,35 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             print(f"[DEBUG] Duplicate detected! Current: {bitrix_id}, Existing: {old_company_id}")
             print(f"[DEBUG] Other companies: {other_companies_info}")
             
+            # КРИТИЧНО: Проверяем что старая компания РЕАЛЬНО существует в Битриксе прямо сейчас
+            old_company_exists = False
+            try:
+                old_company_check = get_bitrix_company(old_company_id)
+                if old_company_check.get('success') and old_company_check.get('company'):
+                    old_company_exists = True
+                    print(f"[DEBUG] Old company {old_company_id} verified - exists in Bitrix")
+                else:
+                    print(f"[DEBUG] Old company {old_company_id} NOT found in Bitrix - will NOT delete new company")
+            except Exception as e:
+                print(f"[DEBUG] Error checking old company {old_company_id}: {e}")
+            
+            # Только если старая компания существует - удаляем новую
+            if not old_company_exists:
+                action_taken = f"Duplicate INN, but old company {old_company_id} doesn't exist - keeping new company {bitrix_id}"
+                print(f"[DEBUG] {action_taken}")
+                
+                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_but_old_missing', False, action_taken, source_info, method)
+                conn.commit()
+                
+                return response_json(200, {
+                    'duplicate': False,
+                    'inn': inn,
+                    'new_company_id': bitrix_id,
+                    'old_company_missing': True,
+                    'old_company_id': old_company_id,
+                    'message': action_taken
+                })
+            
             # КРИТИЧНО: Сохраняем ПОЛНЫЙ объект компании со ВСЕМИ полями
             # company_info уже содержит ВСЕ поля + дела (добавлены в get_bitrix_company)
             company_backup = dict(company_info)
