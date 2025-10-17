@@ -4,6 +4,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import urllib.request
+import urllib.parse
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
@@ -47,12 +49,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             if len(duplicates) > 0:
                 latest_duplicate = duplicates[0]
-                
-                delete_url = body_data.get('delete_webhook_url')
                 action_taken = f"Duplicate found: {latest_duplicate['bitrix_id']}"
+                deleted = False
                 
-                if delete_url and latest_duplicate['bitrix_id'] != bitrix_id:
-                    action_taken = f"Should delete {latest_duplicate['bitrix_id']} via {delete_url}"
+                if latest_duplicate['bitrix_id'] != bitrix_id:
+                    delete_result = delete_bitrix_company(latest_duplicate['bitrix_id'])
+                    if delete_result.get('success'):
+                        action_taken = f"Auto-deleted duplicate company {latest_duplicate['bitrix_id']} via Bitrix24 API"
+                        deleted = True
+                        cur.execute("DELETE FROM companies WHERE bitrix_id = %s", (latest_duplicate['bitrix_id'],))
+                    else:
+                        action_taken = f"Failed to delete {latest_duplicate['bitrix_id']}: {delete_result.get('error')}"
                 
                 log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken)
                 conn.commit()
@@ -65,8 +72,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'title': latest_duplicate['title'],
                         'created_at': latest_duplicate['created_at'].isoformat()
                     },
-                    'action': 'delete_latest',
-                    'message': f'Найден дубликат ИНН {inn}. Рекомендуется удалить компанию {latest_duplicate["bitrix_id"]}'
+                    'action': 'deleted' if deleted else 'delete_failed',
+                    'deleted': deleted,
+                    'message': action_taken
                 })
             
             cur.execute(
@@ -119,6 +127,31 @@ def serialize_log(log: Dict) -> Dict:
     if 'created_at' in result and result['created_at']:
         result['created_at'] = result['created_at'].isoformat()
     return result
+
+def delete_bitrix_company(company_id: str) -> Dict[str, Any]:
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
+    
+    try:
+        url = f"{bitrix_webhook.rstrip('/')}/crm.company.delete.json"
+        params = {'ID': company_id}
+        
+        data = urllib.parse.urlencode(params).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            
+            if result.get('result'):
+                return {'success': True, 'data': result}
+            else:
+                error_msg = result.get('error_description', 'Unknown error')
+                return {'success': False, 'error': error_msg}
+    
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 def response_json(status_code: int, data: Dict) -> Dict[str, Any]:
     return {

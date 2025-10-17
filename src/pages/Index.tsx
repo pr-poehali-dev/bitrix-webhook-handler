@@ -202,22 +202,33 @@ export default function Index() {
 {`{
   "inn": "7707083893",
   "bitrix_id": "12345",
-  "title": "ООО Компания",
-  "delete_webhook_url": "https://..."
+  "title": "ООО Компания"
 }`}
                   </pre>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground mb-2">Ответ при дубликате:</p>
+                  <p className="text-sm font-semibold text-foreground mb-2">Ответ при дубликате (автоудаление):</p>
                   <pre className="p-4 bg-secondary rounded-md text-foreground text-sm overflow-x-auto">
 {`{
   "duplicate": true,
   "inn": "7707083893",
   "existing_company": {...},
-  "action": "delete_latest",
-  "message": "Найден дубликат..."
+  "action": "deleted",
+  "deleted": true,
+  "message": "Auto-deleted duplicate..."
 }`}
                   </pre>
+                </div>
+                <div className="p-4 bg-accent/10 border border-accent/20 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <Icon name="Info" size={16} className="text-accent mt-0.5" />
+                    <div className="text-sm text-foreground">
+                      <p className="font-semibold mb-1">Автоматическое удаление активно</p>
+                      <p className="text-muted-foreground">
+                        При обнаружении дубликата ИНН система автоматически удалит старую компанию через Bitrix24 REST API
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
