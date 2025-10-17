@@ -218,15 +218,44 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             print(f"[DEBUG] Duplicate detected! Current: {bitrix_id}, Existing: {old_company_id}")
             
-            # Сохраняем данные компании перед удалением
+            # Сохраняем ВСЕ данные компании перед удалением
             company_backup = {
                 'bitrix_id': bitrix_id,
                 'inn': inn,
                 'TITLE': title,
                 'RQ_INN': inn,
                 'ASSIGNED_BY_ID': company_info.get('ASSIGNED_BY_ID'),
-                'PHONE': company_info.get('PHONE', [{}])[0].get('VALUE') if company_info.get('PHONE') else None,
-                'EMAIL': company_info.get('EMAIL', [{}])[0].get('VALUE') if company_info.get('EMAIL') else None,
+                'COMPANY_TYPE': company_info.get('COMPANY_TYPE'),
+                'INDUSTRY': company_info.get('INDUSTRY'),
+                'EMPLOYEES': company_info.get('EMPLOYEES'),
+                'CURRENCY_ID': company_info.get('CURRENCY_ID'),
+                'REVENUE': company_info.get('REVENUE'),
+                'OPENED': company_info.get('OPENED'),
+                'COMMENTS': company_info.get('COMMENTS'),
+                'BANKING_DETAILS': company_info.get('BANKING_DETAILS'),
+                'ADDRESS': company_info.get('ADDRESS'),
+                'ADDRESS_2': company_info.get('ADDRESS_2'),
+                'ADDRESS_CITY': company_info.get('ADDRESS_CITY'),
+                'ADDRESS_POSTAL_CODE': company_info.get('ADDRESS_POSTAL_CODE'),
+                'ADDRESS_REGION': company_info.get('ADDRESS_REGION'),
+                'ADDRESS_PROVINCE': company_info.get('ADDRESS_PROVINCE'),
+                'ADDRESS_COUNTRY': company_info.get('ADDRESS_COUNTRY'),
+                'REG_ADDRESS': company_info.get('REG_ADDRESS'),
+                'REG_ADDRESS_2': company_info.get('REG_ADDRESS_2'),
+                'REG_ADDRESS_CITY': company_info.get('REG_ADDRESS_CITY'),
+                'REG_ADDRESS_POSTAL_CODE': company_info.get('REG_ADDRESS_POSTAL_CODE'),
+                'REG_ADDRESS_REGION': company_info.get('REG_ADDRESS_REGION'),
+                'REG_ADDRESS_PROVINCE': company_info.get('REG_ADDRESS_PROVINCE'),
+                'REG_ADDRESS_COUNTRY': company_info.get('REG_ADDRESS_COUNTRY'),
+                'UTM_SOURCE': company_info.get('UTM_SOURCE'),
+                'UTM_MEDIUM': company_info.get('UTM_MEDIUM'),
+                'UTM_CAMPAIGN': company_info.get('UTM_CAMPAIGN'),
+                'UTM_CONTENT': company_info.get('UTM_CONTENT'),
+                'UTM_TERM': company_info.get('UTM_TERM'),
+                'PHONE': company_info.get('PHONE'),
+                'EMAIL': company_info.get('EMAIL'),
+                'WEB': company_info.get('WEB'),
+                'IM': company_info.get('IM'),
             }
             
             delete_result = delete_bitrix_company(bitrix_id)
@@ -499,7 +528,7 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
         return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
     
     try:
-        # Создаём компанию заново с теми же данными
+        # Создаём компанию заново с ВСЕМИ сохранёнными данными
         url = f"{bitrix_webhook.rstrip('/')}/crm.company.add.json"
         
         fields = {
@@ -507,13 +536,54 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
             'fields[RQ_INN]': company_data.get('RQ_INN', company_data.get('inn', '')),
         }
         
-        # Добавляем дополнительные поля если есть
-        if company_data.get('ASSIGNED_BY_ID'):
-            fields['fields[ASSIGNED_BY_ID]'] = company_data['ASSIGNED_BY_ID']
+        # Восстанавливаем ВСЕ основные поля если они были
+        optional_fields = [
+            'ASSIGNED_BY_ID', 'COMPANY_TYPE', 'INDUSTRY', 'EMPLOYEES',
+            'CURRENCY_ID', 'REVENUE', 'OPENED', 'COMMENTS', 'BANKING_DETAILS',
+            'ADDRESS', 'ADDRESS_2', 'ADDRESS_CITY', 'ADDRESS_POSTAL_CODE',
+            'ADDRESS_REGION', 'ADDRESS_PROVINCE', 'ADDRESS_COUNTRY',
+            'REG_ADDRESS', 'REG_ADDRESS_2', 'REG_ADDRESS_CITY',
+            'REG_ADDRESS_POSTAL_CODE', 'REG_ADDRESS_REGION', 'REG_ADDRESS_PROVINCE',
+            'REG_ADDRESS_COUNTRY', 'UTM_SOURCE', 'UTM_MEDIUM', 'UTM_CAMPAIGN',
+            'UTM_CONTENT', 'UTM_TERM'
+        ]
+        
+        for field in optional_fields:
+            if company_data.get(field):
+                fields[f'fields[{field}]'] = company_data[field]
+        
+        # Восстанавливаем мультиполя (телефон, email, web, im)
         if company_data.get('PHONE'):
-            fields['fields[PHONE][0][VALUE]'] = company_data['PHONE']
+            phones = company_data['PHONE'] if isinstance(company_data['PHONE'], list) else [{'VALUE': company_data['PHONE']}]
+            for idx, phone in enumerate(phones):
+                if phone.get('VALUE'):
+                    fields[f'fields[PHONE][{idx}][VALUE]'] = phone['VALUE']
+                    if phone.get('VALUE_TYPE'):
+                        fields[f'fields[PHONE][{idx}][VALUE_TYPE]'] = phone['VALUE_TYPE']
+        
         if company_data.get('EMAIL'):
-            fields['fields[EMAIL][0][VALUE]'] = company_data['EMAIL']
+            emails = company_data['EMAIL'] if isinstance(company_data['EMAIL'], list) else [{'VALUE': company_data['EMAIL']}]
+            for idx, email in enumerate(emails):
+                if email.get('VALUE'):
+                    fields[f'fields[EMAIL][{idx}][VALUE]'] = email['VALUE']
+                    if email.get('VALUE_TYPE'):
+                        fields[f'fields[EMAIL][{idx}][VALUE_TYPE]'] = email['VALUE_TYPE']
+        
+        if company_data.get('WEB'):
+            webs = company_data['WEB'] if isinstance(company_data['WEB'], list) else [{'VALUE': company_data['WEB']}]
+            for idx, web in enumerate(webs):
+                if web.get('VALUE'):
+                    fields[f'fields[WEB][{idx}][VALUE]'] = web['VALUE']
+                    if web.get('VALUE_TYPE'):
+                        fields[f'fields[WEB][{idx}][VALUE_TYPE]'] = web['VALUE_TYPE']
+        
+        if company_data.get('IM'):
+            ims = company_data['IM'] if isinstance(company_data['IM'], list) else [{'VALUE': company_data['IM']}]
+            for idx, im in enumerate(ims):
+                if im.get('VALUE'):
+                    fields[f'fields[IM][{idx}][VALUE]'] = im['VALUE']
+                    if im.get('VALUE_TYPE'):
+                        fields[f'fields[IM][{idx}][VALUE_TYPE]'] = im['VALUE_TYPE']
         
         data = urllib.parse.urlencode(fields).encode('utf-8')
         req = urllib.request.Request(url, data=data)
