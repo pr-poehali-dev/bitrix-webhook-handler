@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface WebhookLog {
   id: number;
@@ -31,6 +32,7 @@ export default function Index() {
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [stats, setStats] = useState<Stats>({ total_requests: 0, duplicates_found: 0, successful: 0 });
   const [loading, setLoading] = useState(true);
+  const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -160,7 +162,11 @@ export default function Index() {
                       </TableHeader>
                       <TableBody>
                         {logs.map((log) => (
-                          <TableRow key={log.id} className="border-border">
+                          <TableRow 
+                            key={log.id} 
+                            className="border-border cursor-pointer hover:bg-secondary/50 transition-colors"
+                            onClick={() => setSelectedLog(log)}
+                          >
                             <TableCell className="text-foreground font-mono text-sm">
                               {formatDate(log.created_at)}
                             </TableCell>
@@ -248,6 +254,75 @@ export default function Index() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="Info" size={20} />
+              Детали запроса #{selectedLog?.id}
+            </DialogTitle>
+            <DialogDescription>
+              Полная информация о webhook запросе
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedLog && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">Дата и время</p>
+                  <p className="text-sm font-mono">{formatDate(selectedLog.created_at)}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">Метод запроса</p>
+                  <Badge variant={selectedLog.request_method === 'GET' ? 'outline' : 'secondary'} className="font-mono">
+                    {selectedLog.request_method || 'POST'}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground">Статус</p>
+                {getStatusBadge(selectedLog.response_status, selectedLog.duplicate_found)}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">ID компании</p>
+                  <p className="text-sm font-mono">{selectedLog.bitrix_company_id || '—'}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">ИНН</p>
+                  <p className="text-sm font-mono font-semibold text-primary">{selectedLog.inn || '—'}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground">Источник запроса</p>
+                <p className="text-xs font-mono bg-secondary p-2 rounded">{selectedLog.source_info || 'Unknown'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground">Действие</p>
+                <p className="text-sm">{selectedLog.action_taken}</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground">Тело запроса</p>
+                <pre className="text-xs bg-secondary p-3 rounded overflow-x-auto">
+                  {JSON.stringify(JSON.parse(selectedLog.request_body), null, 2)}
+                </pre>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground">Тип webhook</p>
+                <Badge variant="outline">{selectedLog.webhook_type}</Badge>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
