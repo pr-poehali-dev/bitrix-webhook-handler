@@ -35,7 +35,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         headers = event.get('headers', {})
         user_agent = headers.get('User-Agent', headers.get('user-agent', 'Unknown'))
-        source_ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'Unknown')
+        
+        # Получаем реальный IP клиента (учитываем прокси)
+        x_forwarded_for = headers.get('X-Forwarded-For', headers.get('x-forwarded-for', ''))
+        x_real_ip = headers.get('X-Real-IP', headers.get('x-real-ip', ''))
+        source_ip_from_context = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'Unknown')
+        
+        # Приоритет: X-Forwarded-For (первый IP в списке) > X-Real-IP > sourceIp
+        if x_forwarded_for:
+            source_ip = x_forwarded_for.split(',')[0].strip()
+        elif x_real_ip:
+            source_ip = x_real_ip
+        else:
+            source_ip = source_ip_from_context
+        
         source_info = f"IP: {source_ip} | UA: {user_agent[:100]}"
         
         if method == 'POST':
