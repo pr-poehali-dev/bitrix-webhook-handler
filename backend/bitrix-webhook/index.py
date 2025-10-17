@@ -34,15 +34,33 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     try:
         if method == 'POST':
-            body_data = json.loads(event.get('body', '{}'))
-            inn: str = body_data.get('inn', '').strip()
+            body_str = event.get('body', '{}')
+            if not body_str or body_str.strip() == '':
+                body_str = '{}'
+            body_data = json.loads(body_str)
             bitrix_id: str = body_data.get('bitrix_id', '').strip()
-            title: str = body_data.get('title', '')
             
-            if not inn or not bitrix_id:
-                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'error', False, 'Missing inn or bitrix_id')
+            if not bitrix_id:
+                log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Missing bitrix_id')
                 conn.commit()
-                return response_json(400, {'error': 'inn and bitrix_id are required'})
+                return response_json(400, {'error': 'bitrix_id is required'})
+            
+            company_data = get_bitrix_company(bitrix_id)
+            
+            if not company_data.get('success'):
+                error_msg = f"Failed to get company data: {company_data.get('error')}"
+                log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, error_msg)
+                conn.commit()
+                return response_json(400, {'error': error_msg})
+            
+            company_info = company_data.get('company', {})
+            inn: str = company_info.get('RQ_INN', '').strip()
+            title: str = company_info.get('TITLE', '')
+            
+            if not inn:
+                log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Company has no INN')
+                conn.commit()
+                return response_json(200, {'duplicate': False, 'message': 'Company has no INN, skipping check'})
             
             search_result = find_duplicate_companies_by_inn(inn)
             
@@ -127,6 +145,28 @@ def serialize_log(log: Dict) -> Dict:
     if 'created_at' in result and result['created_at']:
         result['created_at'] = result['created_at'].isoformat()
     return result
+
+def get_bitrix_company(company_id: str) -> Dict[str, Any]:
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
+    
+    try:
+        url = f"{bitrix_webhook.rstrip('/')}/crm.company.get.json"
+        data = urllib.parse.urlencode({'ID': company_id}).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            
+            if result.get('result'):
+                return {'success': True, 'company': result['result']}
+            else:
+                return {'success': False, 'error': result.get('error_description', 'Company not found')}
+    
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')

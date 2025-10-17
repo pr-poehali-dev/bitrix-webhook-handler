@@ -200,11 +200,12 @@ export default function Index() {
                   <p className="text-sm font-semibold text-foreground mb-2">Формат запроса:</p>
                   <pre className="p-4 bg-secondary rounded-md text-foreground text-sm overflow-x-auto">
 {`{
-  "inn": "7707083893",
-  "bitrix_id": "12345",
-  "title": "ООО Компания"
+  "bitrix_id": "12345"
 }`}
                   </pre>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    ИНН автоматически извлекается из Битрикс24 по ID компании
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-2">Ответ при дубликате (автоудаление):</p>

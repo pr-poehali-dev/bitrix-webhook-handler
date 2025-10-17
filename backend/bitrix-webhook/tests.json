@@ -1,17 +1,15 @@
 {
   "tests": [
     {
-      "name": "Check unique INN - first request",
+      "name": "Missing bitrix_id test",
       "method": "POST",
       "path": "/",
       "body": {
-        "inn": "1234567890",
-        "bitrix_id": "TEST_001",
-        "title": "ООО Тестовая"
+        "test": "empty"
       },
-      "expectedStatus": 200,
+      "expectedStatus": 400,
       "expectedBody": {
-        "inn": "1234567890"
+        "error": "bitrix_id is required"
       },
       "bodyMatcher": "partial"
     },
