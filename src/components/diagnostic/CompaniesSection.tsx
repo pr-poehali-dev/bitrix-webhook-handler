@@ -32,8 +32,8 @@ export default function CompaniesSection({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold flex items-center gap-2">
-          <Icon name="Building2" size={16} />
-          Активные компании в Битрикс24: {filteredCompanies.length} из {result.bitrix_companies.length}
+          <Icon name="Database" size={16} />
+          Реквизиты в базе данных: {filteredCompanies.length} из {result.bitrix_companies.length}
         </p>
         {result.bitrix_companies.length > 1 && (
           <AlertDialog>
@@ -81,13 +81,26 @@ export default function CompaniesSection({
         )}
       </div>
       
-      {result.bitrix_companies.length > 1 && (
+      {result.summary.orphaned_requisites > 0 && (
         <Alert className="bg-accent/10 border-accent/20">
           <Icon name="AlertTriangle" size={16} className="text-accent" />
           <AlertDescription>
+            <p className="font-semibold">Обнаружены мусорные реквизиты!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Найдено {result.summary.orphaned_requisites} реквизитов без активных компаний. 
+              Это "мусор" - реквизиты остались после удаления компаний.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {result.bitrix_companies.filter(c => c.is_active).length > 1 && (
+        <Alert className="bg-destructive/10 border-destructive/20">
+          <Icon name="AlertCircle" size={16} className="text-destructive" />
+          <AlertDescription>
             <p className="font-semibold">Обнаружены дубликаты компаний!</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Найдено {result.bitrix_companies.length} компаний с одинаковым ИНН. 
+              Найдено {result.bitrix_companies.filter(c => c.is_active).length} активных компаний с одинаковым ИНН. 
               Выберите компании для удаления (оставьте минимум одну).
             </p>
           </AlertDescription>

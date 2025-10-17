@@ -2,7 +2,9 @@ export interface DiagnosticResult {
   inn: string;
   bitrix_companies: Array<{
     ID: string;
+    REQUISITE_ID?: string;
     TITLE: string;
+    RQ_NAME?: string;
     DATE_CREATE?: string;
     is_active?: boolean;
     COMPANY_TYPE?: string;
@@ -27,6 +29,7 @@ export interface DiagnosticResult {
 
 export interface CompanyFilters {
   title: string;
+  rqName?: string;
   type: string;
   inn: string;
   kpp: string;

@@ -23,6 +23,7 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
   const [deletingCompanies, setDeletingCompanies] = useState(false);
   const [filters, setFilters] = useState<CompanyFilters>({
     title: '',
+    rqName: '',
     type: '',
     inn: '',
     kpp: '',
@@ -40,7 +41,7 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
     setError('');
     setResult(null);
     setSelectedCompanies(new Set());
-    setFilters({ title: '', type: '', inn: '', kpp: '', phone: '', email: '' });
+    setFilters({ title: '', rqName: '', type: '', inn: '', kpp: '', phone: '', email: '' });
 
     try {
       const response = await fetch(`${apiUrl}?action=diagnose&inn=${encodeURIComponent(inn.trim())}`);
@@ -147,14 +148,15 @@ export default function DiagnosticTools({ apiUrl }: DiagnosticToolsProps) {
     if (!result?.bitrix_companies) return [];
 
     return result.bitrix_companies.filter((company) => {
-      const matchTitle = company.TITLE.toLowerCase().includes(filters.title.toLowerCase());
+      const matchTitle = (company.TITLE || '').toLowerCase().includes(filters.title.toLowerCase());
+      const matchRqName = (company.RQ_NAME || '').toLowerCase().includes((filters.rqName || '').toLowerCase());
       const matchType = (company.COMPANY_TYPE || '').toLowerCase().includes(filters.type.toLowerCase());
       const matchInn = (company.RQ_INN || '').includes(filters.inn);
       const matchKpp = (company.RQ_KPP || '').includes(filters.kpp);
       const matchPhone = (company.PHONE || '').includes(filters.phone);
       const matchEmail = (company.EMAIL || '').toLowerCase().includes(filters.email.toLowerCase());
 
-      return matchTitle && matchType && matchInn && matchKpp && matchPhone && matchEmail;
+      return matchTitle && matchRqName && matchType && matchInn && matchKpp && matchPhone && matchEmail;
     });
   }, [result, filters]);
 

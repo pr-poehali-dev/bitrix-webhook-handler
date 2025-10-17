@@ -41,13 +41,26 @@ export default function CompaniesTable({
               </TableHead>
             )}
             <TableHead className="min-w-[80px]">ID</TableHead>
+            <TableHead className="min-w-[100px]">Статус</TableHead>
             <TableHead className="min-w-[200px]">
               <div className="space-y-1">
-                <div>Наименование</div>
+                <div>Наименование (TITLE)</div>
                 <Input
                   placeholder="Фильтр..."
                   value={filters.title}
                   onChange={(e) => onFilterChange({ ...filters, title: e.target.value })}
+                  className="h-7 text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </TableHead>
+            <TableHead className="min-w-[200px]">
+              <div className="space-y-1">
+                <div>Наименование (RQ_NAME)</div>
+                <Input
+                  placeholder="Фильтр..."
+                  value={filters.rqName || ''}
+                  onChange={(e) => onFilterChange({ ...filters, rqName: e.target.value })}
                   className="h-7 text-xs"
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -118,7 +131,7 @@ export default function CompaniesTable({
         <TableBody>
           {filteredCompanies.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={result.bitrix_companies.length > 1 ? 8 : 7} className="text-center text-muted-foreground">
+              <TableCell colSpan={result.bitrix_companies.length > 1 ? 10 : 9} className="text-center text-muted-foreground">
                 Нет компаний, соответствующих фильтрам
               </TableCell>
             </TableRow>
@@ -137,7 +150,15 @@ export default function CompaniesTable({
                   </TableCell>
                 )}
                 <TableCell className="font-mono font-semibold">{company.ID}</TableCell>
-                <TableCell>{company.TITLE}</TableCell>
+                <TableCell>
+                  {company.is_active ? (
+                    <span className="text-green-600 font-semibold">✓ Активна</span>
+                  ) : (
+                    <span className="text-destructive font-semibold">✗ Мусор</span>
+                  )}
+                </TableCell>
+                <TableCell>{company.TITLE || '—'}</TableCell>
+                <TableCell>{company.RQ_NAME || '—'}</TableCell>
                 <TableCell>{company.COMPANY_TYPE || '—'}</TableCell>
                 <TableCell className="font-mono">{company.RQ_INN || '—'}</TableCell>
                 <TableCell className="font-mono">{company.RQ_KPP || '—'}</TableCell>
