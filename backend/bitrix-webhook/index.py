@@ -21,7 +21,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token',
                 'Access-Control-Max-Age': '86400'
             },
@@ -50,6 +50,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             source_ip = source_ip_from_context
         
         source_info = f"IP: {source_ip} | UA: {user_agent[:100]}"
+        
+        if method == 'DELETE':
+            cur.execute("DELETE FROM webhook_logs")
+            deleted_count = cur.rowcount
+            conn.commit()
+            return response_json(200, {
+                'success': True,
+                'message': f'Deleted {deleted_count} log entries',
+                'deleted_count': deleted_count
+            })
         
         if method == 'POST':
             body_str = event.get('body', '{}')

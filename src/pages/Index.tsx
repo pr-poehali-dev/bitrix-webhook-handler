@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 
 interface WebhookLog {
   id: number;
@@ -33,6 +35,7 @@ export default function Index() {
   const [stats, setStats] = useState<Stats>({ total_requests: 0, duplicates_found: 0, successful: 0 });
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -50,6 +53,22 @@ export default function Index() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const clearLogs = async () => {
+    setIsClearing(true);
+    try {
+      const response = await fetch(API_URL, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Error clearing logs:', error);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -136,11 +155,35 @@ export default function Index() {
           <TabsContent value="logs" className="mt-6">
             <Card className="border-border bg-card">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Icon name="List" size={20} />
-                  Входящие запросы
-                </CardTitle>
-                <CardDescription>История обработки вебхуков из Битрикс24</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Icon name="List" size={20} />
+                      Входящие запросы
+                    </CardTitle>
+                    <CardDescription>История обработки вебхуков из Битрикс24</CardDescription>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" disabled={logs.length === 0 || isClearing}>
+                        <Icon name="Trash2" size={16} className="mr-2" />
+                        Очистить лог
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Подтвердите очистку</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Вы уверены, что хотите удалить все записи логов? Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction onClick={clearLogs}>Очистить</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </CardHeader>
               <CardContent>
                 {loading ? (
