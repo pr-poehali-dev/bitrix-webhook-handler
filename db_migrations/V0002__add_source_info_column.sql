@@ -1,0 +1,1 @@
+ALTER TABLE webhook_logs ADD COLUMN source_info TEXT DEFAULT '';

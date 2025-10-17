@@ -15,6 +15,7 @@ interface WebhookLog {
   duplicate_found: boolean;
   action_taken: string;
   created_at: string;
+  source_info: string;
 }
 
 interface Stats {
@@ -148,6 +149,7 @@ export default function Index() {
                       <TableHeader>
                         <TableRow className="border-border">
                           <TableHead className="text-muted-foreground">Дата и время</TableHead>
+                          <TableHead className="text-muted-foreground">Источник</TableHead>
                           <TableHead className="text-muted-foreground">ИНН</TableHead>
                           <TableHead className="text-muted-foreground">ID компании</TableHead>
                           <TableHead className="text-muted-foreground">Статус</TableHead>
@@ -159,6 +161,9 @@ export default function Index() {
                           <TableRow key={log.id} className="border-border">
                             <TableCell className="text-foreground font-mono text-sm">
                               {formatDate(log.created_at)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-xs max-w-[200px] truncate" title={log.source_info}>
+                              {log.source_info || 'Unknown'}
                             </TableCell>
                             <TableCell className="font-semibold text-primary">{log.inn}</TableCell>
                             <TableCell className="text-muted-foreground">{log.bitrix_company_id}</TableCell>
