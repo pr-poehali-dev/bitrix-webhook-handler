@@ -106,9 +106,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         title: str = company_info.get('TITLE', '')
         
         if not inn:
-            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, 'Company has no INN', source_info, method)
+            action_msg = 'Company has no INN'
+            
+            # Создаём задачу и отправляем уведомление автору
+            task_result = create_task_for_missing_inn(bitrix_id, title, company_info)
+            if task_result.get('success'):
+                action_msg += f" | Task created: {task_result.get('task_id')}"
+            else:
+                action_msg += f" | Failed to create task: {task_result.get('error')}"
+            
+            log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'no_inn', False, action_msg, source_info, method)
             conn.commit()
-            return response_json(200, {'duplicate': False, 'message': 'Company has no INN, skipping check'})
+            return response_json(200, {
+                'duplicate': False, 
+                'message': 'Company has no INN, task created for responsible user',
+                'task_created': task_result.get('success', False),
+                'task_id': task_result.get('task_id')
+            })
         
         search_result = find_duplicate_companies_by_inn(inn)
         
@@ -277,6 +291,99 @@ def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
     
     except Exception as e:
         return {'success': False, 'error': str(e), 'companies': []}
+
+def create_task_for_missing_inn(company_id: str, company_title: str, company_info: Dict[str, Any]) -> Dict[str, Any]:
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
+    
+    try:
+        # Получаем ID автора компании (кто создал)
+        assigned_by_id = company_info.get('ASSIGNED_BY_ID', company_info.get('CREATED_BY_ID', '1'))
+        
+        # Формируем описание задачи
+        task_title = f"Заполнить реквизиты компании: {company_title}"
+        task_description = f"Требуется заполнить ИНН для компании [{company_title}](https://your-bitrix24.ru/crm/company/details/{company_id}/)\n\n"
+        task_description += "Без заполненного ИНН не работает автоматическая проверка дубликатов компаний."
+        
+        # Срок выполнения = текущее время сервера
+        from datetime import datetime
+        deadline = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S+00:00')
+        
+        # Создаём задачу
+        url = f"{bitrix_webhook.rstrip('/')}/tasks.task.add.json"
+        
+        task_data = {
+            'fields[TITLE]': task_title,
+            'fields[DESCRIPTION]': task_description,
+            'fields[RESPONSIBLE_ID]': assigned_by_id,
+            'fields[DEADLINE]': deadline,
+            'fields[UF_CRM_TASK]': [f'CO_{company_id}'],  # Привязка к компании
+        }
+        
+        data = urllib.parse.urlencode(task_data).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            
+            if result.get('result') and result['result'].get('task'):
+                task_id = result['result']['task']['id']
+                print(f"[DEBUG] Task created: {task_id}")
+                
+                # Отправляем уведомление автору
+                notify_result = send_notification_to_user(assigned_by_id, task_title, company_id, company_title)
+                
+                return {
+                    'success': True, 
+                    'task_id': task_id,
+                    'notification_sent': notify_result.get('success', False)
+                }
+            else:
+                error_msg = result.get('error_description', result.get('error', 'Unknown error'))
+                print(f"[DEBUG] Task creation error: {error_msg}")
+                return {'success': False, 'error': error_msg}
+    
+    except Exception as e:
+        print(f"[DEBUG] Exception creating task: {type(e).__name__}: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+def send_notification_to_user(user_id: str, message: str, company_id: str, company_title: str) -> Dict[str, Any]:
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook:
+        return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
+    
+    try:
+        url = f"{bitrix_webhook.rstrip('/')}/im.notify.json"
+        
+        notification_message = f"⚠️ Необходимо заполнить реквизиты компании [{company_title}]\n"
+        notification_message += f"Компания создана без ИНН. Для корректной работы системы проверки дубликатов требуется заполнить реквизиты."
+        
+        params = {
+            'to': user_id,
+            'message': notification_message,
+            'type': 'SYSTEM'
+        }
+        
+        data = urllib.parse.urlencode(params).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            
+            if result.get('result'):
+                print(f"[DEBUG] Notification sent to user {user_id}")
+                return {'success': True}
+            else:
+                error_msg = result.get('error_description', result.get('error', 'Unknown error'))
+                print(f"[DEBUG] Notification error: {error_msg}")
+                return {'success': False, 'error': error_msg}
+    
+    except Exception as e:
+        print(f"[DEBUG] Exception sending notification: {type(e).__name__}: {str(e)}")
+        return {'success': False, 'error': str(e)}
 
 def delete_bitrix_company(company_id: str) -> Dict[str, Any]:
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
