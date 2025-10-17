@@ -159,11 +159,10 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
         return {'success': False, 'error': 'BITRIX24_WEBHOOK_URL not configured'}
     
     try:
-        url = f"{bitrix_webhook.rstrip('/')}/crm.company.get.json"
-        data = urllib.parse.urlencode({'ID': company_id}).encode('utf-8')
-        req = urllib.request.Request(url, data=data)
+        params = urllib.parse.urlencode({'ID': company_id})
+        url = f"{bitrix_webhook.rstrip('/')}/crm.company.get.json?{params}"
         
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(url, timeout=10) as response:
             result = json.loads(response.read().decode('utf-8'))
             
             if result.get('result'):
