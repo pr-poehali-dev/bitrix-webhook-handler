@@ -961,8 +961,11 @@ def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
                     
                     if req_data.get('result'):
                         for req_item in req_data['result']:
-                            # Фильтруем только реквизиты с нужным ИНН
-                            if req_item.get('RQ_INN') == inn:
+                            # Проверяем ИНН (может быть с пробелами или в другом формате)
+                            req_inn = str(req_item.get('RQ_INN', '')).strip()
+                            search_inn = str(inn).strip()
+                            
+                            if req_inn == search_inn:
                                 phone_value = ''
                                 if company.get('PHONE') and isinstance(company['PHONE'], list) and len(company['PHONE']) > 0:
                                     phone_value = company['PHONE'][0].get('VALUE', '')
@@ -992,6 +995,8 @@ def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
                                     'inn': req_item.get('RQ_INN', ''),
                                     'company_exists': True
                                 })
+                            else:
+                                print(f"[DEBUG] Skipping requisite: INN mismatch '{req_inn}' != '{search_inn}'")
             except Exception as e:
                 print(f"[ERROR] Failed to get requisites for company {company_id}: {e}")
         
