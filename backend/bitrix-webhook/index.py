@@ -161,16 +161,26 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
     try:
         params = urllib.parse.urlencode({'ID': company_id})
         url = f"{bitrix_webhook.rstrip('/')}/crm.company.get.json?{params}"
+        print(f"[DEBUG] Requesting Bitrix24: {url}")
         
         with urllib.request.urlopen(url, timeout=10) as response:
-            result = json.loads(response.read().decode('utf-8'))
+            response_text = response.read().decode('utf-8')
+            print(f"[DEBUG] Bitrix24 response: {response_text}")
+            result = json.loads(response_text)
             
             if result.get('result'):
                 return {'success': True, 'company': result['result']}
             else:
-                return {'success': False, 'error': result.get('error_description', 'Company not found')}
+                error_msg = result.get('error_description', result.get('error', 'Company not found'))
+                print(f"[DEBUG] Bitrix24 error: {error_msg}")
+                return {'success': False, 'error': error_msg}
     
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else 'No error body'
+        print(f"[DEBUG] HTTPError {e.code}: {error_body}")
+        return {'success': False, 'error': f'HTTP {e.code}: {error_body}'}
     except Exception as e:
+        print(f"[DEBUG] Exception: {type(e).__name__}: {str(e)}")
         return {'success': False, 'error': str(e)}
 
 def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
