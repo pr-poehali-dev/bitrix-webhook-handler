@@ -121,10 +121,31 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'stats': stats
             })
             
+        # Проверка на тестовые/невалидные ID (999999 и подобные)
+        if bitrix_id in ['999999', '0', ''] or not bitrix_id.isdigit():
+            error_msg = f"Invalid or test company ID: {bitrix_id}"
+            print(f"[DEBUG] Skipping invalid company ID: {bitrix_id}")
+            # Не логируем тестовые запросы как ошибки
+            return response_json(400, {
+                'error': error_msg,
+                'skip_log': True,
+                'message': 'Test or invalid company ID'
+            })
+        
         company_data = get_bitrix_company(bitrix_id)
         
         if not company_data.get('success'):
             error_msg = f"Failed to get company data: {company_data.get('error')}"
+            
+            # Если компания не найдена (404/Not found) - это нормально, не логируем как ошибку
+            if 'Not found' in error_msg or 'HTTP 400' in error_msg:
+                print(f"[DEBUG] Company {bitrix_id} not found in Bitrix24 (deleted or test)")
+                return response_json(404, {
+                    'error': 'Company not found',
+                    'message': 'Company may have been deleted or does not exist'
+                })
+            
+            # Только реальные ошибки API логируем
             log_webhook(cur, 'check_inn', '', bitrix_id, body_data, 'error', False, error_msg, source_info, method)
             conn.commit()
             return response_json(400, {'error': error_msg})
