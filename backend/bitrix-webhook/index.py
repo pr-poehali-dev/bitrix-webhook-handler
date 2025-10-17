@@ -152,69 +152,79 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if search_result.get('success') and len(search_result.get('companies', [])) > 0:
             bitrix_companies = search_result['companies']
             
+            print(f"[DEBUG] Found {len(bitrix_companies)} companies with INN {inn}")
+            print(f"[DEBUG] Company IDs: {[c['ID'] for c in bitrix_companies]}")
+            print(f"[DEBUG] Current company ID: {bitrix_id}")
+            
             # КРИТИЧНО: Отфильтровываем текущую компанию из списка найденных
             existing_ids = [c['ID'] for c in bitrix_companies if c['ID'] != bitrix_id]
             
-            # Дубликат ТОЛЬКО если найдены ДРУГИЕ компании с таким же ИНН
-            if len(existing_ids) > 0:
-                # Дополнительная проверка: всего компаний должно быть больше 1
-                if len(bitrix_companies) < 2:
-                    # Найдена только одна компания (сама текущая) - НЕ дубликат
-                    action_msg = f"Only one company found with INN {inn}, not a duplicate"
-                    log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'success', False, action_msg, source_info, method)
-                    
-                    cur.execute(
-                        "INSERT INTO companies (bitrix_id, inn, title) VALUES (%s, %s, %s) ON CONFLICT (bitrix_id) DO UPDATE SET inn = EXCLUDED.inn, title = EXCLUDED.title, updated_at = CURRENT_TIMESTAMP",
-                        (bitrix_id, inn, title)
-                    )
-                    conn.commit()
-                    
-                    return response_json(200, {
-                        'duplicate': False,
-                        'inn': inn,
-                        'bitrix_id': bitrix_id,
-                        'message': 'ИНН уникален, компания сохранена'
-                    })
-                old_company_id = existing_ids[0]
-                action_taken = f"Duplicate INN found in Bitrix24. Existing company: {old_company_id}"
-                deleted = False
+            print(f"[DEBUG] Other company IDs (excluding current): {existing_ids}")
+            print(f"[DEBUG] Total companies found: {len(bitrix_companies)}, Others: {len(existing_ids)}")
+            
+            # Дубликат ТОЛЬКО если найдены ДРУГИЕ компании (не текущая)
+            if len(existing_ids) == 0:
+                # Найдена только текущая компания - НЕ дубликат
+                action_msg = f"Only current company {bitrix_id} found with INN {inn}, not a duplicate (total: {len(bitrix_companies)})"
+                print(f"[DEBUG] {action_msg}")
+                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'success', False, action_msg, source_info, method)
                 
-                # Сохраняем данные компании перед удалением
-                company_backup = {
-                    'bitrix_id': bitrix_id,
-                    'inn': inn,
-                    'TITLE': title,
-                    'RQ_INN': inn,
-                    'ASSIGNED_BY_ID': company_info.get('ASSIGNED_BY_ID'),
-                    'PHONE': company_info.get('PHONE', [{}])[0].get('VALUE') if company_info.get('PHONE') else None,
-                    'EMAIL': company_info.get('EMAIL', [{}])[0].get('VALUE') if company_info.get('EMAIL') else None,
-                }
-                
-                delete_result = delete_bitrix_company(bitrix_id)
-                if delete_result.get('success'):
-                    action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company_id})"
-                    deleted = True
-                else:
-                    action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
-                
-                # Сохраняем данные для восстановления в request_body
-                body_data_with_backup = body_data.copy()
-                body_data_with_backup['deleted_company_data'] = company_backup
-                
-                log_webhook(cur, 'check_inn', inn, bitrix_id, body_data_with_backup, 'duplicate_found', True, action_taken, source_info, method)
+                cur.execute(
+                    "INSERT INTO companies (bitrix_id, inn, title) VALUES (%s, %s, %s) ON CONFLICT (bitrix_id) DO UPDATE SET inn = EXCLUDED.inn, title = EXCLUDED.title, updated_at = CURRENT_TIMESTAMP",
+                    (bitrix_id, inn, title)
+                )
                 conn.commit()
                 
                 return response_json(200, {
-                    'duplicate': True,
+                    'duplicate': False,
                     'inn': inn,
-                    'new_company_id': bitrix_id,
-                    'existing_company_id': old_company_id,
-                    'bitrix_companies': bitrix_companies,
-                    'action': 'deleted' if deleted else 'delete_failed',
-                    'deleted': deleted,
-                    'message': action_taken,
-                    'company_backup': company_backup
+                    'bitrix_id': bitrix_id,
+                    'message': 'ИНН уникален, компания сохранена'
                 })
+            
+            # Найдены другие компании с таким же ИНН - это дубликат
+            old_company_id = existing_ids[0]
+            action_taken = f"Duplicate INN found in Bitrix24. Existing company: {old_company_id}"
+            deleted = False
+            
+            print(f"[DEBUG] Duplicate detected! Current: {bitrix_id}, Existing: {old_company_id}")
+            
+            # Сохраняем данные компании перед удалением
+            company_backup = {
+                'bitrix_id': bitrix_id,
+                'inn': inn,
+                'TITLE': title,
+                'RQ_INN': inn,
+                'ASSIGNED_BY_ID': company_info.get('ASSIGNED_BY_ID'),
+                'PHONE': company_info.get('PHONE', [{}])[0].get('VALUE') if company_info.get('PHONE') else None,
+                'EMAIL': company_info.get('EMAIL', [{}])[0].get('VALUE') if company_info.get('EMAIL') else None,
+            }
+            
+            delete_result = delete_bitrix_company(bitrix_id)
+            if delete_result.get('success'):
+                action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company_id})"
+                deleted = True
+            else:
+                action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
+            
+            # Сохраняем данные для восстановления в request_body
+            body_data_with_backup = body_data.copy()
+            body_data_with_backup['deleted_company_data'] = company_backup
+            
+            log_webhook(cur, 'check_inn', inn, bitrix_id, body_data_with_backup, 'duplicate_found', True, action_taken, source_info, method)
+            conn.commit()
+            
+            return response_json(200, {
+                'duplicate': True,
+                'inn': inn,
+                'new_company_id': bitrix_id,
+                'existing_company_id': old_company_id,
+                'bitrix_companies': bitrix_companies,
+                'action': 'deleted' if deleted else 'delete_failed',
+                'deleted': deleted,
+                'message': action_taken,
+                'company_backup': company_backup
+            })
         
         cur.execute(
             "INSERT INTO companies (bitrix_id, inn, title) VALUES (%s, %s, %s) ON CONFLICT (bitrix_id) DO UPDATE SET inn = EXCLUDED.inn, title = EXCLUDED.title, updated_at = CURRENT_TIMESTAMP",
