@@ -453,6 +453,10 @@ def get_company_inn_from_requisites(company_id: str) -> str:
     return ''
 
 def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
+    '''
+    КРИТИЧНО: Ищет активные компании с заданным ИНН в Битрикс24
+    Проверяет каждую найденную компанию на существование через crm.company.get
+    '''
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
     
     if not bitrix_webhook:
@@ -471,12 +475,30 @@ def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
         with urllib.request.urlopen(req, timeout=10) as response:
             result = json.loads(response.read().decode('utf-8'))
             
-            if result.get('result'):
-                return {'success': True, 'companies': result['result']}
-            else:
+            if not result.get('result'):
                 return {'success': False, 'error': result.get('error_description', 'Unknown error'), 'companies': []}
+            
+            candidate_companies = result['result']
+            print(f"[DEBUG] crm.company.list found {len(candidate_companies)} candidates with INN {inn}")
+            
+            # КРИТИЧНО: Проверяем каждую компанию на реальное существование
+            verified_companies = []
+            for company in candidate_companies:
+                company_id = company.get('ID')
+                
+                # Проверяем существование компании через crm.company.get
+                check_result = get_bitrix_company(str(company_id))
+                if check_result.get('success'):
+                    verified_companies.append(company)
+                    print(f"[DEBUG] Company {company_id} VERIFIED (exists)")
+                else:
+                    print(f"[DEBUG] Company {company_id} SKIPPED (deleted or not found): {check_result.get('error')}")
+            
+            print(f"[DEBUG] Verified {len(verified_companies)} out of {len(candidate_companies)} companies")
+            return {'success': True, 'companies': verified_companies}
     
     except Exception as e:
+        print(f"[ERROR] find_duplicate_companies_by_inn failed: {e}")
         return {'success': False, 'error': str(e), 'companies': []}
 
 def create_task_for_missing_inn(company_id: str, company_title: str, company_info: Dict[str, Any]) -> Dict[str, Any]:
