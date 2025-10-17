@@ -354,6 +354,11 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
                     print(f"[DEBUG] INN from requisites: {inn}")
                     company['RQ_INN'] = inn
                 
+                # Получаем ПОЛНЫЕ реквизиты (не только ИНН)
+                requisites = get_company_requisites(company_id)
+                company['REQUISITES'] = requisites
+                print(f"[DEBUG] Found {len(requisites)} requisites for company {company_id}")
+                
                 # Получаем дела по компании
                 deals = get_company_deals(company_id)
                 company['DEALS'] = deals
@@ -373,16 +378,17 @@ def get_bitrix_company(company_id: str) -> Dict[str, Any]:
         print(f"[DEBUG] Exception: {type(e).__name__}: {str(e)}")
         return {'success': False, 'error': str(e)}
 
-def get_company_inn_from_requisites(company_id: str) -> str:
+def get_company_requisites(company_id: str) -> List[Dict[str, Any]]:
+    '''Получает ВСЕ реквизиты компании с полными данными'''
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
     
     if not bitrix_webhook:
-        return ''
+        return []
     
     try:
         params_dict = {
             'filter[ENTITY_ID]': company_id,
-            'filter[ENTITY_TYPE_ID]': '4'
+            'filter[ENTITY_TYPE_ID]': '4'  # 4 = Company
         }
         params = urllib.parse.urlencode(params_dict)
         url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json?{params}"
@@ -395,18 +401,26 @@ def get_company_inn_from_requisites(company_id: str) -> str:
             
             if result.get('result'):
                 requisites = result['result']
-                print(f"[DEBUG] Found {len(requisites)} requisites")
-                for req in requisites:
-                    inn = req.get('RQ_INN', '').strip()
-                    print(f"[DEBUG] Requisite ID={req.get('ID')}, RQ_INN={inn}")
-                    if inn:
-                        return inn
+                print(f"[DEBUG] Found {len(requisites)} full requisites")
+                return requisites
         
-        return ''
+        return []
     
     except Exception as e:
         print(f"[DEBUG] Error getting requisites: {type(e).__name__}: {str(e)}")
-        return ''
+        return []
+
+def get_company_inn_from_requisites(company_id: str) -> str:
+    '''Получает только ИНН из реквизитов (для быстрой проверки)'''
+    requisites = get_company_requisites(company_id)
+    
+    for req in requisites:
+        inn = req.get('RQ_INN', '').strip()
+        if inn:
+            print(f"[DEBUG] Found INN in requisite ID={req.get('ID')}: {inn}")
+            return inn
+    
+    return ''
 
 def find_duplicate_companies_by_inn(inn: str) -> Dict[str, Any]:
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
@@ -529,7 +543,7 @@ def send_notification_to_user(user_id: str, message: str, company_id: str, compa
         return {'success': False, 'error': str(e)}
 
 def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
-    '''Восстанавливает компанию с ПОЛНЫМ копированием ВСЕХ полей и дел'''
+    '''Восстанавливает компанию с ПОЛНЫМ копированием ВСЕХ полей, реквизитов и дел'''
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
     
     if not bitrix_webhook:
@@ -543,8 +557,8 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
         print(f"[DEBUG] Company data keys: {list(company_data.keys())[:20]}...")
         
         # Список полей-исключений (системные, не для копирования)
-        skip_fields = {'ID', 'bitrix_id', 'inn', 'DEALS', 'DATE_CREATE', 'DATE_MODIFY', 
-                      'CREATED_BY_ID', 'MODIFY_BY_ID', 'COMPANY_ID'}
+        skip_fields = {'ID', 'bitrix_id', 'inn', 'DEALS', 'REQUISITES', 'DATE_CREATE', 'DATE_MODIFY', 
+                      'CREATED_BY_ID', 'MODIFY_BY_ID', 'COMPANY_ID', 'RQ_INN'}
         
         fields = {}
         
@@ -566,7 +580,6 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
         
         # Обязательные поля
         fields['fields[TITLE]'] = company_data.get('TITLE', 'Восстановленная компания')
-        fields['fields[RQ_INN]'] = company_data.get('RQ_INN', company_data.get('inn', ''))
         
         # Восстанавливаем мультиполя с полной структурой
         multifields = {
@@ -602,6 +615,15 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
                 new_company_id = result['result']
                 print(f"[DEBUG] Company restored with new ID: {new_company_id} (original was {original_id})")
                 
+                # КРИТИЧНО: Восстанавливаем реквизиты (включая ИНН)
+                requisites = company_data.get('REQUISITES', [])
+                if requisites:
+                    print(f"[DEBUG] Restoring {len(requisites)} requisites to new company {new_company_id}")
+                    restore_requisites_result = restore_company_requisites(requisites, new_company_id)
+                    print(f"[DEBUG] Requisites restore result: {restore_requisites_result}")
+                else:
+                    print(f"[DEBUG] WARNING: No requisites found in backup data")
+                
                 # Восстанавливаем дела, переназначая их на новую компанию
                 deals = company_data.get('DEALS', [])
                 if deals:
@@ -620,6 +642,61 @@ def restore_deleted_company(company_data: Dict[str, Any]) -> Dict[str, Any]:
         import traceback
         print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         return {'success': False, 'error': str(e)}
+
+def restore_company_requisites(requisites: List[Dict[str, Any]], new_company_id: str) -> Dict[str, Any]:
+    '''Создает реквизиты для восстановленной компании'''
+    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    
+    if not bitrix_webhook or not requisites:
+        return {'success': False, 'restored_count': 0}
+    
+    restored_count = 0
+    errors = []
+    
+    for req in requisites:
+        try:
+            url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.add.json"
+            
+            # Подготавливаем поля реквизита (исключаем системные)
+            skip_req_fields = {'ID', 'ENTITY_ID', 'DATE_CREATE', 'DATE_MODIFY', 'CREATED_BY_ID', 'MODIFY_BY_ID'}
+            
+            params = {
+                'fields[ENTITY_TYPE_ID]': '4',  # Company
+                'fields[ENTITY_ID]': new_company_id
+            }
+            
+            # Копируем все поля реквизита
+            for key, value in req.items():
+                if key in skip_req_fields or value is None or value == '':
+                    continue
+                params[f'fields[{key}]'] = str(value)
+            
+            print(f"[DEBUG] Creating requisite with {len(params)} fields")
+            
+            data = urllib.parse.urlencode(params).encode('utf-8')
+            request = urllib.request.Request(url, data=data)
+            
+            with urllib.request.urlopen(request, timeout=10) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                
+                if result.get('result'):
+                    new_req_id = result['result']
+                    restored_count += 1
+                    print(f"[DEBUG] Requisite created with ID: {new_req_id}")
+                else:
+                    error_msg = result.get('error_description', result.get('error', 'Unknown error'))
+                    errors.append(f"Requisite creation failed: {error_msg}")
+                    print(f"[DEBUG] Error creating requisite: {error_msg}")
+        
+        except Exception as e:
+            errors.append(f"Requisite exception: {str(e)}")
+            print(f"[DEBUG] Exception creating requisite: {type(e).__name__}: {str(e)}")
+    
+    print(f"[DEBUG] Restored {restored_count}/{len(requisites)} requisites")
+    if errors:
+        print(f"[DEBUG] Errors: {errors}")
+    
+    return {'success': True, 'restored_count': restored_count, 'total': len(requisites), 'errors': errors}
 
 def restore_company_deals(deals: List[Dict[str, Any]], new_company_id: str) -> Dict[str, Any]:
     '''Копирует дела на восстановленную компанию'''
