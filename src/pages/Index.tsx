@@ -221,11 +221,11 @@ export default function Index() {
                 </div>
                 <div className="p-4 bg-accent/10 border border-accent/20 rounded-md">
                   <div className="flex items-start gap-2">
-                    <Icon name="Info" size={16} className="text-accent mt-0.5" />
+                    <Icon name="AlertCircle" size={16} className="text-accent mt-0.5" />
                     <div className="text-sm text-foreground">
-                      <p className="font-semibold mb-1">Автоматическое удаление активно</p>
+                      <p className="font-semibold mb-1">Автоматическое удаление новых дубликатов</p>
                       <p className="text-muted-foreground">
-                        При обнаружении дубликата ИНН система автоматически удалит старую компанию через Bitrix24 REST API
+                        При обнаружении дубликата ИНН система автоматически удалит НОВУЮ компанию (которую только что создали) через Bitrix24 REST API. Старая компания сохраняется.
                       </p>
                     </div>
                   </div>

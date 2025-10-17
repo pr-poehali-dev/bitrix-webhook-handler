@@ -44,22 +44,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 conn.commit()
                 return response_json(400, {'error': 'inn and bitrix_id are required'})
             
-            cur.execute("SELECT bitrix_id, title, created_at FROM companies WHERE inn = %s ORDER BY created_at DESC", (inn,))
-            duplicates = cur.fetchall()
+            cur.execute("SELECT bitrix_id, title, created_at FROM companies WHERE inn = %s AND bitrix_id != %s ORDER BY created_at ASC", (inn, bitrix_id))
+            existing_companies = cur.fetchall()
             
-            if len(duplicates) > 0:
-                latest_duplicate = duplicates[0]
-                action_taken = f"Duplicate found: {latest_duplicate['bitrix_id']}"
+            if len(existing_companies) > 0:
+                old_company = existing_companies[0]
+                action_taken = f"Duplicate INN found. Existing company: {old_company['bitrix_id']}"
                 deleted = False
                 
-                if latest_duplicate['bitrix_id'] != bitrix_id:
-                    delete_result = delete_bitrix_company(latest_duplicate['bitrix_id'])
-                    if delete_result.get('success'):
-                        action_taken = f"Auto-deleted duplicate company {latest_duplicate['bitrix_id']} via Bitrix24 API"
-                        deleted = True
-                        cur.execute("DELETE FROM companies WHERE bitrix_id = %s", (latest_duplicate['bitrix_id'],))
-                    else:
-                        action_taken = f"Failed to delete {latest_duplicate['bitrix_id']}: {delete_result.get('error')}"
+                delete_result = delete_bitrix_company(bitrix_id)
+                if delete_result.get('success'):
+                    action_taken = f"Auto-deleted NEW duplicate company {bitrix_id} (INN already exists in {old_company['bitrix_id']})"
+                    deleted = True
+                else:
+                    action_taken = f"Failed to delete new company {bitrix_id}: {delete_result.get('error')}"
                 
                 log_webhook(cur, 'check_inn', inn, bitrix_id, body_data, 'duplicate_found', True, action_taken)
                 conn.commit()
@@ -67,10 +65,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return response_json(200, {
                     'duplicate': True,
                     'inn': inn,
+                    'new_company_id': bitrix_id,
                     'existing_company': {
-                        'bitrix_id': latest_duplicate['bitrix_id'],
-                        'title': latest_duplicate['title'],
-                        'created_at': latest_duplicate['created_at'].isoformat()
+                        'bitrix_id': old_company['bitrix_id'],
+                        'title': old_company['title'],
+                        'created_at': old_company['created_at'].isoformat()
                     },
                     'action': 'deleted' if deleted else 'delete_failed',
                     'deleted': deleted,
