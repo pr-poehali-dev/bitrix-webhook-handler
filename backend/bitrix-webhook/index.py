@@ -904,7 +904,7 @@ def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
     '''
     Диагностирует проблемы с дубликатами ИНН:
     1. Ищет активные компании в Битрикс24 через API
-    2. Получает полные данные каждой компании с реквизитами
+    2. Получает реквизиты всех компаний одним запросом
     3. Ищет реквизиты в базе данных Битрикс24
     4. Сравнивает результаты и находит "мусорные" реквизиты
     '''
@@ -919,54 +919,85 @@ def diagnose_inn_duplicates(inn: str, cur) -> Dict[str, Any]:
         }
     }
     
-    # 1. Ищем активные компании через API Битрикс24
-    search_result = find_duplicate_companies_by_inn(inn)
-    if search_result.get('success') and search_result.get('companies'):
-        companies_with_full_data = []
-        
-        for company in search_result['companies']:
-            company_id = company.get('ID')
-            full_data_result = get_bitrix_company(str(company_id))
-            
-            if full_data_result.get('success'):
-                company_full = full_data_result['company']
-                
-                requisites = company_full.get('REQUISITES', [])
-                req_data = requisites[0] if requisites else {}
-                
-                phone_value = ''
-                if company_full.get('PHONE') and isinstance(company_full['PHONE'], list) and len(company_full['PHONE']) > 0:
-                    phone_value = company_full['PHONE'][0].get('VALUE', '')
-                
-                email_value = ''
-                if company_full.get('EMAIL') and isinstance(company_full['EMAIL'], list) and len(company_full['EMAIL']) > 0:
-                    email_value = company_full['EMAIL'][0].get('VALUE', '')
-                
-                companies_with_full_data.append({
-                    'ID': company_id,
-                    'TITLE': company_full.get('TITLE', ''),
-                    'DATE_CREATE': company_full.get('DATE_CREATE', ''),
-                    'is_active': True,
-                    'COMPANY_TYPE': company_full.get('COMPANY_TYPE', ''),
-                    'RQ_INN': req_data.get('RQ_INN', ''),
-                    'RQ_KPP': req_data.get('RQ_KPP', ''),
-                    'PHONE': phone_value,
-                    'EMAIL': email_value,
-                })
-            else:
-                companies_with_full_data.append(company)
-        
-        result['bitrix_companies'] = companies_with_full_data
-        result['summary']['total_bitrix'] = len(companies_with_full_data)
-    
-    # 2. Ищем реквизиты в базе данных Битрикс24 напрямую
     bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
     if not bitrix_webhook:
         return result
     
     try:
-        # Ищем реквизиты через REST API (т.к. прямого доступа к БД Битрикс нет)
-        # Используем поиск по всем реквизитам компаний
+        # 1. Ищем компании с ИНН через crm.company.list с расширенными полями
+        params_dict = {
+            'filter[RQ_INN]': inn,
+        }
+        for field in ['ID', 'TITLE', 'DATE_CREATE', 'COMPANY_TYPE', 'PHONE', 'EMAIL']:
+            params_dict[f'select[]'] = field
+        
+        url = f"{bitrix_webhook.rstrip('/')}/crm.company.list.json"
+        data = urllib.parse.urlencode(params_dict).encode('utf-8')
+        req = urllib.request.Request(url, data=data)
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            companies_result = json.loads(response.read().decode('utf-8'))
+            
+            if not companies_result.get('result'):
+                return result
+            
+            companies = companies_result['result']
+            company_ids = [c['ID'] for c in companies]
+            
+            # 2. Получаем ВСЕ реквизиты для найденных компаний одним запросом
+            requisites_map = {}
+            if company_ids:
+                params = urllib.parse.urlencode({
+                    'filter[RQ_INN]': inn,
+                    'filter[ENTITY_TYPE_ID]': '4',
+                })
+                url = f"{bitrix_webhook.rstrip('/')}/crm.requisite.list.json?{params}"
+                
+                with urllib.request.urlopen(url, timeout=10) as req_response:
+                    req_data = json.loads(req_response.read().decode('utf-8'))
+                    
+                    if req_data.get('result'):
+                        for req_item in req_data['result']:
+                            entity_id = req_item.get('ENTITY_ID')
+                            if entity_id:
+                                if entity_id not in requisites_map:
+                                    requisites_map[entity_id] = []
+                                requisites_map[entity_id].append(req_item)
+            
+            # 3. Формируем результат с данными компаний и реквизитов
+            for company in companies:
+                company_id = company['ID']
+                company_requisites = requisites_map.get(str(company_id), [])
+                req_data = company_requisites[0] if company_requisites else {}
+                
+                phone_value = ''
+                if company.get('PHONE') and isinstance(company['PHONE'], list) and len(company['PHONE']) > 0:
+                    phone_value = company['PHONE'][0].get('VALUE', '')
+                
+                email_value = ''
+                if company.get('EMAIL') and isinstance(company['EMAIL'], list) and len(company['EMAIL']) > 0:
+                    email_value = company['EMAIL'][0].get('VALUE', '')
+                
+                result['bitrix_companies'].append({
+                    'ID': company_id,
+                    'TITLE': company.get('TITLE', ''),
+                    'DATE_CREATE': company.get('DATE_CREATE', ''),
+                    'is_active': True,
+                    'COMPANY_TYPE': company.get('COMPANY_TYPE', ''),
+                    'RQ_INN': req_data.get('RQ_INN', inn),
+                    'RQ_KPP': req_data.get('RQ_KPP', ''),
+                    'PHONE': phone_value,
+                    'EMAIL': email_value,
+                })
+            
+            result['summary']['total_bitrix'] = len(result['bitrix_companies'])
+    
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch companies: {e}")
+        return result
+    
+    # 4. Поиск мусорных реквизитов (уже получены в шаге 2)
+    try:
         params = urllib.parse.urlencode({
             'filter[RQ_INN]': inn,
             'select[]': ['ID', 'ENTITY_ID', 'ENTITY_TYPE_ID', 'RQ_INN']
