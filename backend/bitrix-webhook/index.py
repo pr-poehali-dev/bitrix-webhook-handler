@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import urllib.request
@@ -183,10 +183,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             print(f"[DEBUG] Current company ID: {bitrix_id}")
             
             # КРИТИЧНО: Отфильтровываем текущую компанию из списка найденных
-            existing_ids = [c['ID'] for c in bitrix_companies if c['ID'] != bitrix_id]
+            # Сравниваем как строки, т.к. ID из Битрикс может быть строкой
+            existing_ids = [c['ID'] for c in bitrix_companies if str(c['ID']) != str(bitrix_id)]
             
             print(f"[DEBUG] Other company IDs (excluding current): {existing_ids}")
             print(f"[DEBUG] Total companies found: {len(bitrix_companies)}, Others: {len(existing_ids)}")
+            print(f"[DEBUG] Comparison: bitrix_id={bitrix_id} (type: {type(bitrix_id)})")
+            print(f"[DEBUG] All found IDs: {[(c['ID'], type(c['ID'])) for c in bitrix_companies]}")
             
             # Дубликат ТОЛЬКО если найдены ДРУГИЕ компании (не текущая)
             if len(existing_ids) == 0:
@@ -282,7 +285,16 @@ def log_webhook(cur, webhook_type: str, inn: str, bitrix_id: str, request_body: 
 def serialize_log(log: Dict) -> Dict:
     result = dict(log)
     if 'created_at' in result and result['created_at']:
-        result['created_at'] = result['created_at'].isoformat()
+        # Конвертируем UTC в Екатеринбург (UTC+5)
+        ekb_tz = timezone(timedelta(hours=5))
+        if result['created_at'].tzinfo is None:
+            # Если время без timezone, считаем его UTC
+            utc_time = result['created_at'].replace(tzinfo=timezone.utc)
+        else:
+            utc_time = result['created_at']
+        
+        ekb_time = utc_time.astimezone(ekb_tz)
+        result['created_at'] = ekb_time.strftime('%Y-%m-%d %H:%M:%S')
     return result
 
 def get_bitrix_company(company_id: str) -> Dict[str, Any]:
