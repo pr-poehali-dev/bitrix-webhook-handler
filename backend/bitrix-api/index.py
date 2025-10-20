@@ -302,63 +302,10 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         purchase_id = str(result['result']['item']['id'])
         
-        # Добавляем товары через crm.item.productrow.set
+        # К сожалению, crm.item.productrow.set не поддерживает смарт-процессы
+        # Товары уже сохранены в базе и доступны через комментарий в таймлайне
         products_added = False
-        try:
-            print(f"DEBUG: Товаров для добавления: {len(products)}")
-            
-            # Формируем массив товарных позиций согласно документации
-            product_rows = []
-            for product in products:
-                row = {
-                    'productName': product['name'],
-                    'price': float(product['price']),
-                    'quantity': float(product['quantity']),
-                    'measureCode': int(product.get('measureCode', 796)),
-                    'measureName': product['measure']
-                }
-                
-                # Добавляем productId только если это действительно товар из каталога
-                if product['id'] and product['id'].isdigit() and int(product['id']) > 0:
-                    row['productId'] = int(product['id'])
-                
-                product_rows.append(row)
-            
-            # Используем метод crm.item.productrow.set
-            productrow_api_url = f"{webhook_url}crm.item.productrow.set.json"
-            productrow_params = {
-                'ownerType': f'DYNAMIC_{entity_type_id}',  # Формат для смарт-процессов
-                'ownerId': int(purchase_id),
-                'productRows': product_rows
-            }
-            
-            print(f"DEBUG: Устанавливаем товарные позиции: {json.dumps(productrow_params, ensure_ascii=False)}")
-            
-            productrow_data = json.dumps(productrow_params).encode('utf-8')
-            productrow_req = urllib.request.Request(
-                productrow_api_url,
-                data=productrow_data,
-                headers={'Content-Type': 'application/json'}
-            )
-            
-            with urllib.request.urlopen(productrow_req, timeout=10) as productrow_response:
-                productrow_result = json.loads(productrow_response.read().decode('utf-8'))
-                print(f"DEBUG: Результат установки товарных позиций: {json.dumps(productrow_result, ensure_ascii=False)}")
-                
-                if 'result' in productrow_result:
-                    if productrow_result['result'].get('productRows'):
-                        products_added = True
-                        print(f"DEBUG: Успешно добавлено {len(productrow_result['result']['productRows'])} товарных позиций")
-                    else:
-                        print(f"DEBUG: Ответ не содержит productRows. Полный result: {json.dumps(productrow_result['result'], ensure_ascii=False)}")
-                else:
-                    print(f"DEBUG: Ответ не содержит result. Возможно ошибка: {json.dumps(productrow_result, ensure_ascii=False)}")
-                    
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8') if e.fp else ''
-            print(f"ERROR: Ошибка добавления товаров HTTP {e.code}: {error_body}")
-        except Exception as e:
-            print(f"ERROR: Ошибка добавления товаров: {str(e)}")
+        print(f"DEBUG: Товары будут отображены в комментарии таймлайна, т.к. API Битрикс24 не поддерживает товарные позиции для смарт-процессов")
         
         # Добавляем товары комментарием в таймлайн (так как productRows не работает для смарт-процессов)
         try:
