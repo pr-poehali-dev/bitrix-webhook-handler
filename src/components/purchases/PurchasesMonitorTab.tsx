@@ -90,9 +90,15 @@ export default function PurchasesMonitorTab({ purchases, loading, stats }: Purch
             <TableBody>
               {purchases.map((purchase) => {
                 const isExpanded = expandedPurchases.has(purchase.id);
-                const products: Product[] = purchase.products_data 
-                  ? JSON.parse(purchase.products_data) 
-                  : [];
+                let products: Product[] = [];
+                
+                try {
+                  products = purchase.products_data 
+                    ? JSON.parse(purchase.products_data) 
+                    : [];
+                } catch (e) {
+                  console.error('Error parsing products_data:', e, purchase.products_data);
+                }
                 
                 return (
                   <>
