@@ -302,42 +302,46 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         purchase_id = str(result['result']['item']['id'])
         
-        # Добавляем товары и услуги в закупку через crm.item.productrow.add
+        # Добавляем товары и услуги через crm.item.update с productRows
         products_added = False
         try:
             print(f"DEBUG: Товаров для добавления: {len(products)}")
             
-            # Добавляем каждый товар отдельным запросом
+            # Формируем массив товаров
+            product_rows = []
             for product in products:
-                productrows_api_url = f"{webhook_url}crm.item.productrow.add.json"
-                
-                productrows_params = {
-                    'fields': {
-                        'ownerId': int(purchase_id),
-                        'ownerType': str(entity_type_id),  # Для смарт-процессов передаем просто ID
-                        'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
-                        'productName': product['name'],
-                        'price': float(product['price']),
-                        'quantity': float(product['quantity']),
-                        'measureCode': int(product.get('measureCode', 796)),
-                        'measureName': product['measure']
-                    }
-                }
-                
-                print(f"DEBUG: Добавляем товар: {product['name']}, params: {json.dumps(productrows_params, ensure_ascii=False)}")
-                
-                productrows_data = json.dumps(productrows_params).encode('utf-8')
-                productrows_req = urllib.request.Request(
-                    productrows_api_url,
-                    data=productrows_data,
-                    headers={'Content-Type': 'application/json'}
-                )
-                
-                with urllib.request.urlopen(productrows_req, timeout=10) as productrows_response:
-                    productrows_result = json.loads(productrows_response.read().decode('utf-8'))
-                    print(f"DEBUG: Результат добавления товара {product['name']}: {productrows_result}")
+                product_rows.append({
+                    'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
+                    'productName': product['name'],
+                    'price': float(product['price']),
+                    'quantity': float(product['quantity']),
+                    'measureCode': int(product.get('measureCode', 796)),
+                    'measureName': product['measure']
+                })
             
-            products_added = True
+            # Обновляем закупку с товарами
+            update_api_url = f"{webhook_url}crm.item.update.json"
+            update_params = {
+                'entityTypeId': int(entity_type_id),
+                'id': int(purchase_id),
+                'fields': {
+                    'productRows': product_rows
+                }
+            }
+            
+            print(f"DEBUG: Обновляем закупку товарами: {json.dumps(update_params, ensure_ascii=False)}")
+            
+            update_data = json.dumps(update_params).encode('utf-8')
+            update_req = urllib.request.Request(
+                update_api_url,
+                data=update_data,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            with urllib.request.urlopen(update_req, timeout=10) as update_response:
+                update_result = json.loads(update_response.read().decode('utf-8'))
+                print(f"DEBUG: Результат обновления: {update_result}")
+                products_added = True
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8') if e.fp else ''
             print(f"ERROR: Ошибка добавления товаров HTTP {e.code}: {error_body}")
