@@ -266,7 +266,7 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         total_amount = sum(p['total'] for p in products)
         products_text = '\n'.join([
-            f"{i+1}. {p['name']} - {p['quantity']} {p['measure']} x {p['price']} ₽ = {p['total']} ₽"
+            f"{i+1}. {p['name']} (ID: {p['id']}) - {p['quantity']} {p['measure']} x {p['price']} ₽ = {p['total']} ₽"
             for i, p in enumerate(products)
         ])
         
