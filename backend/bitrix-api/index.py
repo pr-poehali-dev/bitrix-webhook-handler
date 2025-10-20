@@ -302,46 +302,53 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         purchase_id = str(result['result']['item']['id'])
         
-        # Добавляем товары и услуги через crm.item.update с productRows
+        # Добавляем товары через crm.item.productrow.set
         products_added = False
         try:
             print(f"DEBUG: Товаров для добавления: {len(products)}")
             
-            # Формируем массив товаров
+            # Формируем массив товарных позиций согласно документации
             product_rows = []
             for product in products:
-                product_rows.append({
-                    'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
+                row = {
                     'productName': product['name'],
                     'price': float(product['price']),
                     'quantity': float(product['quantity']),
                     'measureCode': int(product.get('measureCode', 796)),
                     'measureName': product['measure']
-                })
+                }
+                
+                # Добавляем productId только если это действительно товар из каталога
+                if product['id'] and product['id'].isdigit() and int(product['id']) > 0:
+                    row['productId'] = int(product['id'])
+                
+                product_rows.append(row)
             
-            # Обновляем закупку с товарами
-            update_api_url = f"{webhook_url}crm.item.update.json"
-            update_params = {
+            # Используем метод crm.item.productrow.set
+            productrow_api_url = f"{webhook_url}crm.item.productrow.set.json"
+            productrow_params = {
                 'entityTypeId': int(entity_type_id),
                 'id': int(purchase_id),
-                'fields': {
-                    'productRows': product_rows
-                }
+                'rows': product_rows
             }
             
-            print(f"DEBUG: Обновляем закупку товарами: {json.dumps(update_params, ensure_ascii=False)}")
+            print(f"DEBUG: Устанавливаем товарные позиции: {json.dumps(productrow_params, ensure_ascii=False)}")
             
-            update_data = json.dumps(update_params).encode('utf-8')
-            update_req = urllib.request.Request(
-                update_api_url,
-                data=update_data,
+            productrow_data = json.dumps(productrow_params).encode('utf-8')
+            productrow_req = urllib.request.Request(
+                productrow_api_url,
+                data=productrow_data,
                 headers={'Content-Type': 'application/json'}
             )
             
-            with urllib.request.urlopen(update_req, timeout=10) as update_response:
-                update_result = json.loads(update_response.read().decode('utf-8'))
-                print(f"DEBUG: Результат обновления: {update_result}")
-                products_added = True
+            with urllib.request.urlopen(productrow_req, timeout=10) as productrow_response:
+                productrow_result = json.loads(productrow_response.read().decode('utf-8'))
+                print(f"DEBUG: Результат установки товарных позиций: {productrow_result}")
+                
+                if 'result' in productrow_result and productrow_result['result'].get('productRows'):
+                    products_added = True
+                    print(f"DEBUG: Успешно добавлено {len(productrow_result['result']['productRows'])} товарных позиций")
+                    
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8') if e.fp else ''
             print(f"ERROR: Ошибка добавления товаров HTTP {e.code}: {error_body}")
