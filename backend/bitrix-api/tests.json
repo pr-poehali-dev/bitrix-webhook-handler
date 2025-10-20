@@ -1,0 +1,49 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS request returns CORS headers",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET without deal_id returns error",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "success": false,
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET list_purchases returns purchases array",
+      "method": "GET",
+      "path": "/?action=list_purchases",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "purchases": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST without deal_id returns error",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "create_purchase",
+        "products": []
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "success": false,
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

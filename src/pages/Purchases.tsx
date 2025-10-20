@@ -9,7 +9,8 @@ import PurchasesMonitorTab from '@/components/purchases/PurchasesMonitorTab';
 import WebhooksTab from '@/components/purchases/WebhooksTab';
 import { Purchase, Webhook } from '@/components/purchases/types';
 
-const API_URL = 'https://functions.poehali.dev/f7d622c6-5381-482f-a6e4-a8709c2ff2e4';
+const API_URL = 'https://functions.poehali.dev/73ea551a-feab-4417-92c3-dd78ca56946b';
+const WEBHOOK_URL = 'https://functions.poehali.dev/81376a34-1578-43f3-966a-793d36df08f1';
 
 export default function Purchases() {
   const navigate = useNavigate();
