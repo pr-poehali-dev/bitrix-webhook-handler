@@ -3,10 +3,13 @@ import os
 from typing import Dict, Any, List, Optional
 import urllib.request
 import urllib.parse
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from datetime import datetime
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Business: Обрабатывает закупки из Битрикс24 - получает товары по сделке и создаёт закупки в ЦРМ Обеспечение
+    Business: Обрабатывает закупки из Битрикс24 - получает товары по сделке, создаёт закупки в ЦРМ Обеспечение, логирует вебхуки
     Args: event - dict с httpMethod, body (company_id или deal_id)
           context - object с атрибутами: request_id, function_name
     Returns: HTTP response dict со списком товаров или результатом создания закупки
@@ -18,7 +21,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Session-Id',
                 'Access-Control-Max-Age': '86400'
             },
@@ -26,75 +29,213 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
-    bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    if not bitrix_webhook:
-        return response_json(500, {
-            'success': False,
-            'error': 'BITRIX24_WEBHOOK_URL не настроен'
-        })
-    
-    if method == 'POST':
-        body_data = json.loads(event.get('body', '{}'))
-        action = body_data.get('action', '')
+    try:
+        bitrix_webhook = os.environ.get('BITRIX24_WEBHOOK_URL', '')
         
-        # Получение списка товаров по сделке
-        if action == 'get_products':
-            deal_id = body_data.get('deal_id', '')
-            
-            if not deal_id:
-                return response_json(400, {
-                    'success': False,
-                    'error': 'deal_id обязателен'
-                })
-            
-            products_result = get_deal_products(bitrix_webhook, deal_id)
-            return response_json(200 if products_result['success'] else 400, products_result)
-        
-        # Создание закупки в ЦРМ Обеспечение
-        if action == 'create_purchase':
-            deal_id = body_data.get('deal_id', '')
-            products = body_data.get('products', [])
-            
-            if not deal_id:
-                return response_json(400, {
-                    'success': False,
-                    'error': 'deal_id обязателен'
-                })
-            
-            purchase_result = create_purchase_in_crm(bitrix_webhook, deal_id, products)
-            return response_json(200 if purchase_result['success'] else 400, purchase_result)
-        
-        # Вебхук от Битрикс24 (когда создаётся сделка)
-        company_id = body_data.get('company_id', '')
-        deal_id = body_data.get('deal_id', '')
-        
-        if deal_id:
-            products_result = get_deal_products(bitrix_webhook, deal_id)
-            return response_json(200, products_result)
-        
-        return response_json(400, {
-            'success': False,
-            'error': 'Укажите action или deal_id'
-        })
-    
-    if method == 'GET':
-        query_params = event.get('queryStringParameters', {}) or {}
-        deal_id = query_params.get('deal_id', '')
-        
-        if not deal_id:
-            return response_json(400, {
+        if not bitrix_webhook:
+            return response_json(500, {
                 'success': False,
-                'error': 'deal_id обязателен в query параметрах'
+                'error': 'BITRIX24_WEBHOOK_URL не настроен'
             })
         
-        products_result = get_deal_products(bitrix_webhook, deal_id)
-        return response_json(200 if products_result['success'] else 400, products_result)
+        headers = event.get('headers', {})
+        user_agent = headers.get('User-Agent', headers.get('user-agent', 'Unknown'))
+        x_forwarded_for = headers.get('X-Forwarded-For', headers.get('x-forwarded-for', ''))
+        source_ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'Unknown')
+        source_info = f"IP: {source_ip} | UA: {user_agent[:100]}"
+        
+        # GET - Получение списка закупок и вебхуков
+        if method == 'GET':
+            query_params = event.get('queryStringParameters', {}) or {}
+            action = query_params.get('action', '')
+            
+            # Получить список закупок
+            if action == 'list_purchases':
+                cur.execute('''
+                    SELECT * FROM purchases 
+                    ORDER BY created_at DESC 
+                    LIMIT 100
+                ''')
+                purchases = [dict(row) for row in cur.fetchall()]
+                
+                for p in purchases:
+                    if isinstance(p.get('created_at'), datetime):
+                        p['created_at'] = p['created_at'].isoformat()
+                    if isinstance(p.get('updated_at'), datetime):
+                        p['updated_at'] = p['updated_at'].isoformat()
+                
+                return response_json(200, {
+                    'success': True,
+                    'purchases': purchases,
+                    'total': len(purchases)
+                })
+            
+            # Получить журнал вебхуков
+            if action == 'list_webhooks':
+                cur.execute('''
+                    SELECT * FROM purchase_webhooks 
+                    ORDER BY created_at DESC 
+                    LIMIT 100
+                ''')
+                webhooks = [dict(row) for row in cur.fetchall()]
+                
+                for w in webhooks:
+                    if isinstance(w.get('created_at'), datetime):
+                        w['created_at'] = w['created_at'].isoformat()
+                
+                return response_json(200, {
+                    'success': True,
+                    'webhooks': webhooks,
+                    'total': len(webhooks)
+                })
+            
+            # Получить товары по сделке
+            deal_id = query_params.get('deal_id', '')
+            
+            if not deal_id:
+                return response_json(400, {
+                    'success': False,
+                    'error': 'deal_id обязателен в query параметрах'
+                })
+            
+            products_result = get_deal_products(bitrix_webhook, deal_id)
+            
+            if products_result['success']:
+                log_webhook(cur, conn, deal_id, '', 'get_products', 
+                           len(products_result.get('products', [])), 0, 
+                           json.dumps({'deal_id': deal_id}), 'success', source_info)
+            
+            return response_json(200 if products_result['success'] else 400, products_result)
+        
+        # POST - Создание закупки или получение товаров
+        if method == 'POST':
+            body_data = json.loads(event.get('body', '{}'))
+            action = body_data.get('action', '')
+            
+            # Получение списка товаров по сделке
+            if action == 'get_products':
+                deal_id = body_data.get('deal_id', '')
+                
+                if not deal_id:
+                    return response_json(400, {
+                        'success': False,
+                        'error': 'deal_id обязателен'
+                    })
+                
+                products_result = get_deal_products(bitrix_webhook, deal_id)
+                
+                if products_result['success']:
+                    log_webhook(cur, conn, deal_id, '', 'get_products', 
+                               len(products_result.get('products', [])), 0,
+                               json.dumps(body_data), 'success', source_info)
+                
+                return response_json(200 if products_result['success'] else 400, products_result)
+            
+            # Создание закупки в ЦРМ Обеспечение
+            if action == 'create_purchase':
+                deal_id = body_data.get('deal_id', '')
+                products = body_data.get('products', [])
+                
+                if not deal_id:
+                    return response_json(400, {
+                        'success': False,
+                        'error': 'deal_id обязателен'
+                    })
+                
+                purchase_result = create_purchase_in_crm(bitrix_webhook, deal_id, products)
+                
+                if purchase_result['success']:
+                    total_amount = sum([p.get('total', 0) for p in products])
+                    
+                    log_webhook(cur, conn, deal_id, '', 'create_purchase',
+                               len(products), total_amount,
+                               json.dumps(body_data), 'success', source_info)
+                    
+                    save_purchase(cur, conn, purchase_result.get('purchase_id', ''),
+                                 deal_id, purchase_result.get('title', ''),
+                                 'new', len(products), total_amount,
+                                 json.dumps(products, ensure_ascii=False))
+                
+                return response_json(200 if purchase_result['success'] else 400, purchase_result)
+            
+            # Вебхук от Битрикс24 (когда создаётся сделка)
+            deal_id = body_data.get('deal_id', body_data.get('data', {}).get('FIELDS', {}).get('ID', ''))
+            company_id = body_data.get('company_id', '')
+            
+            if deal_id:
+                products_result = get_deal_products(bitrix_webhook, deal_id)
+                
+                if products_result['success']:
+                    total_amount = sum([p.get('total', 0) for p in products_result.get('products', [])])
+                    
+                    log_webhook(cur, conn, deal_id, company_id, 'webhook_deal_add',
+                               len(products_result.get('products', [])), total_amount,
+                               json.dumps(body_data), 'success', source_info)
+                
+                return response_json(200, products_result)
+            
+            return response_json(400, {
+                'success': False,
+                'error': 'Укажите action или deal_id'
+            })
+        
+        # DELETE - Очистка логов
+        if method == 'DELETE':
+            query_params = event.get('queryStringParameters', {}) or {}
+            action = query_params.get('action', '')
+            
+            if action == 'clear_webhooks':
+                cur.execute('DELETE FROM purchase_webhooks')
+                deleted = cur.rowcount
+                conn.commit()
+                return response_json(200, {
+                    'success': True,
+                    'message': f'Удалено записей: {deleted}'
+                })
+        
+        return response_json(405, {
+            'success': False,
+            'error': 'Метод не поддерживается'
+        })
     
-    return response_json(405, {
-        'success': False,
-        'error': 'Метод не поддерживается'
-    })
+    finally:
+        cur.close()
+        conn.close()
+
+
+def log_webhook(cur, conn, deal_id: str, company_id: str, webhook_type: str,
+                products_count: int, total_amount: float, request_body: str,
+                response_status: str, source_info: str):
+    '''
+    Сохраняет лог вебхука в БД
+    '''
+    cur.execute('''
+        INSERT INTO purchase_webhooks 
+        (deal_id, company_id, webhook_type, products_count, total_amount, request_body, response_status, source_info)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ''', (deal_id, company_id, webhook_type, products_count, total_amount, request_body, response_status, source_info))
+    conn.commit()
+
+
+def save_purchase(cur, conn, purchase_id: str, deal_id: str, title: str,
+                  status: str, products_count: int, total_amount: float, products_data: str):
+    '''
+    Сохраняет закупку в БД
+    '''
+    cur.execute('''
+        INSERT INTO purchases 
+        (purchase_id, deal_id, title, status, products_count, total_amount, products_data)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (purchase_id) DO UPDATE SET
+            status = EXCLUDED.status,
+            products_count = EXCLUDED.products_count,
+            total_amount = EXCLUDED.total_amount,
+            updated_at = CURRENT_TIMESTAMP
+    ''', (purchase_id, deal_id, title, status, products_count, total_amount, products_data))
+    conn.commit()
 
 
 def get_deal_products(webhook_url: str, deal_id: str) -> Dict[str, Any]:
@@ -165,7 +306,6 @@ def create_purchase_in_crm(webhook_url: str, deal_id: str, products: List[Dict[s
     Создаёт закупку в ЦРМ "Обеспечение" на основе сделки и списка товаров
     '''
     try:
-        # Сначала получаем данные сделки
         deal_info = get_deal_info(webhook_url, deal_id)
         
         if not deal_info['success']:
@@ -176,8 +316,6 @@ def create_purchase_in_crm(webhook_url: str, deal_id: str, products: List[Dict[s
         
         deal_data = deal_info['deal']
         
-        # Создаём элемент в смарт-процессе "Обеспечение" (нужен ID смарт-процесса)
-        # ВАЖНО: Замените SMART_PROCESS_ID на реальный ID вашего процесса "Обеспечение"
         smart_process_id = os.environ.get('SMART_PROCESS_PURCHASES_ID', '')
         
         if not smart_process_id:
@@ -188,16 +326,16 @@ def create_purchase_in_crm(webhook_url: str, deal_id: str, products: List[Dict[s
         
         url = f"{webhook_url.rstrip('/')}/crm.item.add.json"
         
-        # Формируем поля для закупки
+        title = f"Закупка для сделки {deal_data.get('TITLE', deal_id)}"
+        
         fields = {
             'entityTypeId': int(smart_process_id),
             'fields': {
-                'title': f"Закупка для сделки {deal_data.get('TITLE', deal_id)}",
-                'ufCrm_1_DEAL_ID': deal_id,  # Привязка к сделке (замените на реальное поле)
+                'title': title,
+                'ufCrm_1_DEAL_ID': deal_id,
             }
         }
         
-        # Добавляем товары в описание или в отдельное поле
         products_text = '\n'.join([
             f"{p.get('name', 'N/A')}: {p.get('quantity', 0)} {p.get('measure', 'шт')} x {p.get('price', 0)} = {p.get('total', 0)} руб."
             for p in products
@@ -229,6 +367,7 @@ def create_purchase_in_crm(webhook_url: str, deal_id: str, products: List[Dict[s
                 'success': True,
                 'purchase_id': purchase_id,
                 'deal_id': deal_id,
+                'title': title,
                 'message': 'Закупка успешно создана в ЦРМ Обеспечение'
             }
     
