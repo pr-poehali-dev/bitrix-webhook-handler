@@ -314,7 +314,7 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
                 productrows_params = {
                     'fields': {
                         'ownerId': int(purchase_id),
-                        'ownerType': f'Tb{entity_type_id}',  # Формат для смарт-процессов: Tb + entityTypeId
+                        'ownerType': f'D{entity_type_id}',  # Формат для смарт-процессов: D + entityTypeId
                         'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
                         'productName': product['name'],
                         'price': float(product['price']),
