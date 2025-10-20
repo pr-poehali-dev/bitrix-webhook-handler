@@ -178,11 +178,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 
                 purchase_id = purchase_result['purchase_id']
                 total_amount = sum(p['total'] for p in products)
+                products_json = json.dumps(products, ensure_ascii=False)
                 
                 cur.execute("""
                     INSERT INTO purchases 
-                    (purchase_id, deal_id, title, status, products_count, total_amount)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    (purchase_id, deal_id, title, status, products_count, total_amount, products_data)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (
                     purchase_id,
@@ -190,7 +191,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     f'Закупка по сделке #{deal_id}',
                     'new',
                     len(products),
-                    total_amount
+                    total_amount,
+                    products_json
                 ))
                 
                 conn.commit()
