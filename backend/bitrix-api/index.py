@@ -225,13 +225,17 @@ def get_deal_products(webhook_url: str, deal_id: str) -> Dict[str, Any]:
         
         products = []
         for item in result['result']:
+            product_type = int(item.get('TYPE', 1))  # 1 = товар, 4 = услуга
             products.append({
                 'id': str(item.get('PRODUCT_ID', '')),
                 'name': item.get('PRODUCT_NAME', 'Неизвестный товар'),
                 'quantity': float(item.get('QUANTITY', 0)),
                 'price': float(item.get('PRICE', 0)),
                 'total': float(item.get('PRICE', 0)) * float(item.get('QUANTITY', 0)),
-                'measure': item.get('MEASURE_NAME', 'шт')
+                'measure': item.get('MEASURE_NAME', 'шт'),
+                'measureCode': int(item.get('MEASURE_CODE', 796)),
+                'type': product_type,
+                'isService': product_type == 4  # 4 = услуга
             })
         
         return {'products': products}
@@ -282,30 +286,66 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         purchase_id = str(result['result']['item']['id'])
         
-        # Добавляем комментарий со списком товаров
+        # Добавляем товары в закупку (только товары, не услуги)
         try:
-            comment_text = f"Товары из сделки #{deal_id}:\n\n{products_text}\n\nИтого: {total_amount:,.0f} ₽"
+            productrows_api_url = f"{webhook_url}crm.item.productrow.set.json"
             
-            comment_api_url = f"{webhook_url}crm.timeline.comment.add.json"
-            comment_params = {
-                'fields': {
-                    'ENTITY_ID': int(purchase_id),
-                    'ENTITY_TYPE': f'dynamic_{entity_type_id}',
-                    'COMMENT': comment_text
+            product_rows = []
+            for product in products:
+                # Пропускаем услуги (type = 4)
+                if product.get('isService', False):
+                    continue
+                
+                product_rows.append({
+                    'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
+                    'productName': product['name'],
+                    'price': float(product['price']),
+                    'quantity': float(product['quantity']),
+                    'measureCode': int(product.get('measureCode', 796)),
+                    'measureName': product['measure']
+                })
+            
+            if product_rows:
+                productrows_params = {
+                    'id': int(purchase_id),
+                    'entityTypeId': int(entity_type_id),
+                    'productRows': product_rows
                 }
-            }
-            
-            comment_data = json.dumps(comment_params).encode('utf-8')
-            comment_req = urllib.request.Request(
-                comment_api_url,
-                data=comment_data,
-                headers={'Content-Type': 'application/json'}
-            )
-            
-            with urllib.request.urlopen(comment_req, timeout=10) as comment_response:
-                comment_result = json.loads(comment_response.read().decode('utf-8'))
-        except:
-            pass  # Если не удалось добавить комментарий, не критично
+                
+                productrows_data = json.dumps(productrows_params).encode('utf-8')
+                productrows_req = urllib.request.Request(
+                    productrows_api_url,
+                    data=productrows_data,
+                    headers={'Content-Type': 'application/json'}
+                )
+                
+                with urllib.request.urlopen(productrows_req, timeout=10) as productrows_response:
+                    productrows_result = json.loads(productrows_response.read().decode('utf-8'))
+        except Exception as e:
+            # Если не удалось добавить товары, добавляем хотя бы комментарий
+            try:
+                comment_text = f"Товары из сделки #{deal_id}:\n\n{products_text}\n\nИтого: {total_amount:,.0f} ₽\n\nОшибка добавления товаров: {str(e)}"
+                
+                comment_api_url = f"{webhook_url}crm.timeline.comment.add.json"
+                comment_params = {
+                    'fields': {
+                        'ENTITY_ID': int(purchase_id),
+                        'ENTITY_TYPE': f'dynamic_{entity_type_id}',
+                        'COMMENT': comment_text
+                    }
+                }
+                
+                comment_data = json.dumps(comment_params).encode('utf-8')
+                comment_req = urllib.request.Request(
+                    comment_api_url,
+                    data=comment_data,
+                    headers={'Content-Type': 'application/json'}
+                )
+                
+                with urllib.request.urlopen(comment_req, timeout=10) as comment_response:
+                    comment_result = json.loads(comment_response.read().decode('utf-8'))
+            except:
+                pass
         
         return {'purchase_id': purchase_id}
         
