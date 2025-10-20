@@ -302,7 +302,7 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         purchase_id = str(result['result']['item']['id'])
         
-        # Добавляем товары в закупку (только товары, не услуги)
+        # Добавляем товары и услуги в закупку
         products_added = False
         try:
             productrows_api_url = f"{webhook_url}crm.item.productrow.set.json"
