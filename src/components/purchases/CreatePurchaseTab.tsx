@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { Product } from './types';
 import HelpDialog from './HelpDialog';
+import ConnectionTestCard from './ConnectionTestCard';
 
 interface CreatePurchaseTabProps {
   apiUrl: string;
@@ -36,7 +37,15 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
         setProducts(data.products || []);
         onShowToast('Успешно', `Загружено товаров: ${data.total_items}`);
       } else {
-        onShowToast('Ошибка', data.error || 'Не удалось загрузить товары', 'destructive');
+        const errorMsg = data.error || 'Не удалось загрузить товары';
+        
+        if (errorMsg.includes('BITRIX24_WEBHOOK_URL') || errorMsg.includes('not configured')) {
+          onShowToast('Настройте секреты', 'Сначала укажите URL вебхука Битрикс24 в секретах проекта (см. инструкцию по кнопке ?)', 'destructive');
+        } else if (errorMsg.includes('Bitrix24 API error')) {
+          onShowToast('Ошибка Битрикс24', 'Проверьте ID сделки и права вебхука в Битрикс24', 'destructive');
+        } else {
+          onShowToast('Ошибка', errorMsg, 'destructive');
+        }
         setProducts([]);
       }
     } catch (error) {
@@ -80,7 +89,15 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
         setDealId('');
         onPurchaseCreated();
       } else {
-        onShowToast('Ошибка', data.error || 'Не удалось создать закупку', 'destructive');
+        const errorMsg = data.error || 'Не удалось создать закупку';
+        
+        if (errorMsg.includes('BITRIX24_WEBHOOK_URL') || errorMsg.includes('not configured')) {
+          onShowToast('Настройте секреты', 'Необходимо указать URL вебхука Битрикс24 в настройках проекта', 'destructive');
+        } else if (errorMsg.includes('SMART_PROCESS_PURCHASES_ID')) {
+          onShowToast('Настройте секреты', 'Необходимо указать ID смарт-процесса в настройках проекта', 'destructive');
+        } else {
+          onShowToast('Ошибка', errorMsg, 'destructive');
+        }
       }
     } catch (error) {
       console.error('Error creating purchase:', error);
@@ -94,17 +111,27 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
 
   return (
     <div className="space-y-6">
+      <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Icon name="Info" size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-blue-900 font-semibold mb-1">
+              Перед началом работы настройте интеграцию
+            </p>
+            <p className="text-xs text-blue-800">
+              Нажмите на кнопку <strong>?</strong> справа и следуйте инструкциям для настройки секретов и прав Битрикс24
+            </p>
+          </div>
+          <HelpDialog apiUrl={apiUrl} />
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle>Получить товары по сделке</CardTitle>
-              <CardDescription>
-                Введите ID сделки из Битрикс24, чтобы загрузить список товаров
-              </CardDescription>
-            </div>
-            <HelpDialog apiUrl={apiUrl} />
-          </div>
+          <CardTitle>Получить товары по сделке</CardTitle>
+          <CardDescription>
+            Введите ID сделки из Битрикс24, чтобы загрузить список товаров
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-4">
@@ -210,6 +237,8 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
           </CardContent>
         </Card>
       )}
+
+      <ConnectionTestCard apiUrl={apiUrl} />
     </div>
   );
 }
