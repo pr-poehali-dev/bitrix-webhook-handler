@@ -343,11 +343,16 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
             
             with urllib.request.urlopen(productrow_req, timeout=10) as productrow_response:
                 productrow_result = json.loads(productrow_response.read().decode('utf-8'))
-                print(f"DEBUG: Результат установки товарных позиций: {productrow_result}")
+                print(f"DEBUG: Результат установки товарных позиций: {json.dumps(productrow_result, ensure_ascii=False)}")
                 
-                if 'result' in productrow_result and productrow_result['result'].get('productRows'):
-                    products_added = True
-                    print(f"DEBUG: Успешно добавлено {len(productrow_result['result']['productRows'])} товарных позиций")
+                if 'result' in productrow_result:
+                    if productrow_result['result'].get('productRows'):
+                        products_added = True
+                        print(f"DEBUG: Успешно добавлено {len(productrow_result['result']['productRows'])} товарных позиций")
+                    else:
+                        print(f"DEBUG: Ответ не содержит productRows. Полный result: {json.dumps(productrow_result['result'], ensure_ascii=False)}")
+                else:
+                    print(f"DEBUG: Ответ не содержит result. Возможно ошибка: {json.dumps(productrow_result, ensure_ascii=False)}")
                     
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8') if e.fp else ''
