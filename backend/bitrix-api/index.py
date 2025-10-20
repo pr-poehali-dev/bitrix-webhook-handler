@@ -145,6 +145,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 deal_id = body_data.get('deal_id', '').strip()
                 products = body_data.get('products', [])
                 
+                import sys
+                print(f"DEBUG POST: deal_id={deal_id}, products count={len(products)}", file=sys.stderr)
+                if products:
+                    print(f"DEBUG: First product: {products[0]}", file=sys.stderr)
+                else:
+                    print(f"DEBUG: body_data keys: {list(body_data.keys())}", file=sys.stderr)
+                    print(f"DEBUG: full body_data: {body_data}", file=sys.stderr)
+                
                 if not deal_id:
                     return response_json(400, {
                         'success': False,
