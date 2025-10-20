@@ -338,6 +338,10 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
                     productrows_result = json.loads(productrows_response.read().decode('utf-8'))
                     print(f"DEBUG: Результат добавления товаров: {productrows_result}")
                     products_added = True
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8') if e.fp else ''
+            print(f"ERROR: Ошибка добавления товаров HTTP {e.code}: {error_body}")
+            print(f"DEBUG: Отправленные данные: {json.dumps(productrows_params, ensure_ascii=False)}")
         except Exception as e:
             print(f"ERROR: Ошибка добавления товаров: {str(e)}")
             # Если не удалось добавить товары, добавляем хотя бы комментарий
