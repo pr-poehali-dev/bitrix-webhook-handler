@@ -1,48 +1,61 @@
 import { useState, useEffect } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
-import StatsCards from '@/components/StatsCards';
-import LogsTable from '@/components/LogsTable';
-import ApiDocumentation from '@/components/ApiDocumentation';
-import LogDetailsDialog from '@/components/LogDetailsDialog';
-import DiagnosticTools from '@/components/DiagnosticTools';
 import LoginForm from '@/components/LoginForm';
-
-interface WebhookLog {
-  id: number;
-  webhook_type: string;
-  inn: string;
-  bitrix_company_id: string;
-  request_body: string;
-  response_status: string;
-  duplicate_found: boolean;
-  action_taken: string;
-  created_at: string;
-  source_info: string;
-  request_method: string;
-}
-
-interface Stats {
-  total_requests: number;
-  duplicates_found: number;
-  successful: number;
-}
+import { useNavigate } from 'react-router-dom';
 
 const API_URL = 'https://functions.poehali.dev/6a844be4-d079-4584-aa51-27ed6b95cb81';
 
+interface Module {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  path: string;
+  color: string;
+}
+
 export default function Index() {
-  const [logs, setLogs] = useState<WebhookLog[]>([]);
-  const [stats, setStats] = useState<Stats>({ total_requests: 0, duplicates_found: 0, successful: 0 });
-  const [loading, setLoading] = useState(true);
-  const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null);
-  const [isClearing, setIsClearing] = useState(false);
-  const [restoringId, setRestoringId] = useState<number | null>(null);
-  
+  const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+
+  const modules: Module[] = [
+    {
+      id: 'inn-uniqueness',
+      title: 'Уникальность по ИНН',
+      description: 'Проверка дубликатов компаний по ИНН в Битрикс24',
+      icon: 'ShieldCheck',
+      path: '/inn-uniqueness',
+      color: 'bg-blue-500',
+    },
+    {
+      id: 'contracts',
+      title: 'Договоры',
+      description: 'Управление договорами и контрактами',
+      icon: 'FileSignature',
+      path: '/contracts',
+      color: 'bg-green-500',
+    },
+    {
+      id: 'purchases',
+      title: 'Закупки',
+      description: 'Работа с закупками и заявками',
+      icon: 'ShoppingCart',
+      path: '/purchases',
+      color: 'bg-orange-500',
+    },
+    {
+      id: 'unf-documents',
+      title: 'Документы в УНФ',
+      description: 'Интеграция документов с УНФ',
+      icon: 'FolderOpen',
+      path: '/unf-documents',
+      color: 'bg-purple-500',
+    },
+  ];
 
   useEffect(() => {
     const authToken = localStorage.getItem('webhook_auth_token');
@@ -50,14 +63,6 @@ export default function Index() {
       setIsAuthenticated(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchData();
-      const interval = setInterval(fetchData, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [isAuthenticated]);
 
   const handleLogin = async (username: string, password: string) => {
     setAuthLoading(true);
@@ -95,174 +100,52 @@ export default function Index() {
     setIsAuthenticated(false);
   };
 
-  const fetchData = async () => {
-    try {
-      const response = await fetch(API_URL);
-      const data = await response.json();
-      setLogs(data.logs || []);
-      setStats(data.stats || { total_requests: 0, duplicates_found: 0, successful: 0 });
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const clearLogs = async () => {
-    setIsClearing(true);
-    try {
-      const response = await fetch(API_URL, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        await fetchData();
-      }
-    } catch (error) {
-      console.error('Error clearing logs:', error);
-    } finally {
-      setIsClearing(false);
-    }
-  };
-
-  const restoreCompany = async (log: WebhookLog) => {
-    setRestoringId(log.id);
-    try {
-      console.log('Restoring log:', log);
-      const requestBody = JSON.parse(log.request_body);
-      console.log('Parsed request body:', requestBody);
-      const companyData = requestBody.deleted_company_data;
-      console.log('Company data:', companyData);
-      
-      if (!companyData) {
-        alert('Данные для восстановления не найдены в логе. Возможно компания была удалена до обновления системы.');
-        setRestoringId(null);
-        return;
-      }
-
-      console.log('Sending restore request...');
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'restore',
-          original_data: companyData,
-        }),
-      });
-
-      console.log('Response status:', response.status);
-      const result = await response.json();
-      console.log('Response result:', result);
-      
-      if (result.success) {
-        alert(`✅ Компания восстановлена с новым ID: ${result.company_id}`);
-        await fetchData();
-      } else {
-        alert(`❌ Ошибка восстановления: ${result.error || 'Неизвестная ошибка'}`);
-      }
-    } catch (error) {
-      console.error('Error restoring company:', error);
-      alert('❌ Ошибка при восстановлении компании. Проверьте консоль браузера.');
-    } finally {
-      setRestoringId(null);
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: 'Asia/Yekaterinburg',
-    }).format(date);
-  };
-
-  const getStatusBadge = (status: string, duplicate: boolean) => {
-    if (duplicate) {
-      return <Badge variant="destructive" className="gap-1"><Icon name="AlertTriangle" size={12} />Дубликат</Badge>;
-    }
-    if (status === 'success') {
-      return <Badge className="bg-primary gap-1"><Icon name="CheckCircle" size={12} />Успешно</Badge>;
-    }
-    return <Badge variant="secondary">{status}</Badge>;
-  };
-
   if (!isAuthenticated) {
     return <LoginForm onLogin={handleLogin} error={authError} loading={authLoading} />;
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Icon name="Webhook" size={32} className="text-primary" />
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
+      <div className="max-w-7xl mx-auto p-6 space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-primary rounded-xl shadow-lg">
+              <Icon name="LayoutDashboard" size={40} className="text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Битрикс24 Webhook Monitor</h1>
-              <p className="text-muted-foreground">Мониторинг вебхуков и проверка дубликатов ИНН</p>
+              <h1 className="text-4xl font-bold text-foreground">Битрикс24 Integration Hub</h1>
+              <p className="text-muted-foreground text-lg">Автоматизация и управление бизнес-процессами</p>
             </div>
           </div>
-          <Button variant="outline" onClick={handleLogout}>
-            <Icon name="LogOut" size={16} className="mr-2" />
+          <Button variant="outline" onClick={handleLogout} className="gap-2">
+            <Icon name="LogOut" size={18} />
             Выход
           </Button>
         </div>
 
-        <StatsCards stats={stats} />
-
-        <Tabs defaultValue="logs" className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-3 bg-secondary">
-            <TabsTrigger value="logs" className="data-[state=active]:bg-primary">
-              <Icon name="FileText" size={16} className="mr-2" />
-              Журнал вебхуков
-            </TabsTrigger>
-            <TabsTrigger value="diagnostic" className="data-[state=active]:bg-primary">
-              <Icon name="Wrench" size={16} className="mr-2" />
-              Диагностика
-            </TabsTrigger>
-            <TabsTrigger value="api" className="data-[state=active]:bg-primary">
-              <Icon name="Code" size={16} className="mr-2" />
-              API
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="logs" className="mt-6">
-            <LogsTable
-              logs={logs}
-              loading={loading}
-              isClearing={isClearing}
-              restoringId={restoringId}
-              onLogSelect={setSelectedLog}
-              onClearLogs={clearLogs}
-              onRestoreCompany={restoreCompany}
-              formatDate={formatDate}
-              getStatusBadge={getStatusBadge}
-            />
-          </TabsContent>
-
-          <TabsContent value="diagnostic" className="mt-6">
-            <DiagnosticTools apiUrl={API_URL} />
-          </TabsContent>
-
-          <TabsContent value="api" className="mt-6">
-            <ApiDocumentation apiUrl={API_URL} />
-          </TabsContent>
-        </Tabs>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {modules.map((module) => (
+            <Card
+              key={module.id}
+              className="group cursor-pointer transition-all hover:shadow-xl hover:scale-105 border-2 hover:border-primary"
+              onClick={() => navigate(module.path)}
+            >
+              <CardHeader>
+                <div className="flex items-start gap-4">
+                  <div className={`p-4 ${module.color} rounded-xl shadow-md group-hover:scale-110 transition-transform`}>
+                    <Icon name={module.icon} size={32} className="text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <CardTitle className="text-2xl mb-2">{module.title}</CardTitle>
+                    <CardDescription className="text-base">{module.description}</CardDescription>
+                  </div>
+                  <Icon name="ArrowRight" size={24} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                </div>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
       </div>
-
-      <LogDetailsDialog
-        selectedLog={selectedLog}
-        onClose={() => setSelectedLog(null)}
-        formatDate={formatDate}
-        getStatusBadge={getStatusBadge}
-      />
     </div>
   );
 }
