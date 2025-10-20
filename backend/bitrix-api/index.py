@@ -81,6 +81,35 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'stats': stats
                 })
             
+            if action == 'test_connection':
+                test_result = {
+                    'success': True,
+                    'webhook_configured': bool(bitrix_webhook_url),
+                    'smart_process_configured': bool(smart_process_id),
+                    'database_connected': True
+                }
+                
+                if not bitrix_webhook_url:
+                    test_result['success'] = False
+                    test_result['error'] = 'BITRIX24_WEBHOOK_URL не настроен в секретах'
+                elif not smart_process_id:
+                    test_result['success'] = False
+                    test_result['error'] = 'SMART_PROCESS_PURCHASES_ID не настроен в секретах'
+                else:
+                    try:
+                        test_url = f"{bitrix_webhook_url}crm.deal.list.json?filter[ID]=1"
+                        req = urllib.request.Request(test_url)
+                        with urllib.request.urlopen(req, timeout=5) as response:
+                            test_data = json.loads(response.read().decode('utf-8'))
+                            if 'error' in test_data:
+                                test_result['success'] = False
+                                test_result['error'] = f'Ошибка Битрикс24: {test_data["error_description"]}'
+                    except Exception as e:
+                        test_result['success'] = False
+                        test_result['error'] = f'Не удалось подключиться к Битрикс24: {str(e)}'
+                
+                return response_json(200, test_result)
+            
             if not deal_id:
                 return response_json(400, {
                     'success': False,
