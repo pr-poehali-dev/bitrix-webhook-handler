@@ -281,6 +281,31 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         purchase_id = str(result['result']['item']['id'])
         
+        # Добавляем комментарий со списком товаров
+        try:
+            comment_text = f"Товары из сделки #{deal_id}:\n\n{products_text}\n\nИтого: {total_amount:,.0f} ₽"
+            
+            comment_api_url = f"{webhook_url}crm.timeline.comment.add.json"
+            comment_params = {
+                'fields': {
+                    'ENTITY_ID': int(purchase_id),
+                    'ENTITY_TYPE': f'dynamic_{entity_type_id}',
+                    'COMMENT': comment_text
+                }
+            }
+            
+            comment_data = json.dumps(comment_params).encode('utf-8')
+            comment_req = urllib.request.Request(
+                comment_api_url,
+                data=comment_data,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            with urllib.request.urlopen(comment_req, timeout=10) as comment_response:
+                comment_result = json.loads(comment_response.read().decode('utf-8'))
+        except:
+            pass  # Если не удалось добавить комментарий, не критично
+        
         return {'purchase_id': purchase_id}
         
     except urllib.error.HTTPError as e:
