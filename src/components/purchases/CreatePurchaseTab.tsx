@@ -21,6 +21,7 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
 
   const fetchProducts = async () => {
     if (!dealId.trim()) {
@@ -67,7 +68,15 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
       return;
     }
 
+    setLogs([]);
     setCreating(true);
+    
+    const addLog = (msg: string) => {
+      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+    };
+    
+    addLog('Отправка запроса на создание закупки...');
+    
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -98,8 +107,10 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
       }
 
       console.log('Create purchase response:', data);
+      addLog(`Ответ от сервера: ${JSON.stringify(data)}`);
 
       if (data.success) {
+        addLog(`✅ Закупка успешно создана! ID: ${data.purchase_id}`);
         onShowToast('✅ Закупка создана', `ID закупки: ${data.purchase_id}`);
         setProducts([]);
         setDealId('');
@@ -108,6 +119,7 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
         const errorMsg = data.error || 'Не удалось создать закупку';
         
         console.error('Purchase creation error:', errorMsg);
+        addLog(`❌ Ошибка: ${errorMsg}`);
         
         if (errorMsg.includes('BITRIX24_WEBHOOK_URL') || errorMsg.includes('not configured')) {
           onShowToast('Настройте секреты', 'Необходимо указать URL вебхука Битрикс24 в настройках проекта', 'destructive');
@@ -119,6 +131,7 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
       }
     } catch (error) {
       console.error('Error creating purchase:', error);
+      addLog(`❌ Исключение: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof Error && error.name === 'AbortError') {
         onShowToast('Таймаут', 'Запрос занял слишком много времени. Проверьте настройки Битрикс24 или повторите позже.', 'destructive');
       } else {
@@ -256,6 +269,22 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
                 </TableRow>
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {logs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Логи создания закупки</CardTitle>
+            <CardDescription>Детальная информация о процессе создания</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-black text-green-400 p-4 rounded-lg font-mono text-xs max-h-96 overflow-y-auto space-y-1">
+              {logs.map((log, idx) => (
+                <div key={idx}>{log}</div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
