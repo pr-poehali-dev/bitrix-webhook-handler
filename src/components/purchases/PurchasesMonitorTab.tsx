@@ -2,14 +2,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
-import { Purchase } from './types';
+import { Purchase, MonthlyStats } from './types';
+import PurchaseAnalytics from './PurchaseAnalytics';
 
 interface PurchasesMonitorTabProps {
   purchases: Purchase[];
   loading: boolean;
+  stats: MonthlyStats | null;
 }
 
-export default function PurchasesMonitorTab({ purchases, loading }: PurchasesMonitorTabProps) {
+export default function PurchasesMonitorTab({ purchases, loading, stats }: PurchasesMonitorTabProps) {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return new Intl.DateTimeFormat('ru-RU', {
@@ -41,12 +43,15 @@ export default function PurchasesMonitorTab({ purchases, loading }: PurchasesMon
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Реестр закупок</CardTitle>
-        <CardDescription>Все созданные закупки и их статусы</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-6">
+      <PurchaseAnalytics stats={stats} />
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Реестр закупок</CardTitle>
+          <CardDescription>Все созданные закупки и их статусы</CardDescription>
+        </CardHeader>
+        <CardContent>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Icon name="Loader2" size={32} className="animate-spin text-muted-foreground" />
@@ -92,5 +97,6 @@ export default function PurchasesMonitorTab({ purchases, loading }: PurchasesMon
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }

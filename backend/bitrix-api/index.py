@@ -74,6 +74,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'webhooks': [dict(w) for w in webhooks]
                 })
             
+            if action == 'stats':
+                stats = calculate_monthly_stats(cur)
+                return response_json(200, {
+                    'success': True,
+                    'stats': stats
+                })
+            
             if not deal_id:
                 return response_json(400, {
                     'success': False,
@@ -240,6 +247,56 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
     except Exception as e:
         return {'error': f'Bitrix24 API error: {str(e)}'}
+
+def calculate_monthly_stats(cur) -> Dict[str, Any]:
+    """Calculate purchase statistics for current and previous month"""
+    
+    cur.execute("""
+        SELECT 
+            COUNT(*) as count,
+            COALESCE(SUM(total_amount), 0) as total_amount
+        FROM purchases
+        WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)
+    """)
+    current = cur.fetchone()
+    
+    cur.execute("""
+        SELECT 
+            COUNT(*) as count,
+            COALESCE(SUM(total_amount), 0) as total_amount
+        FROM purchases
+        WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+          AND created_at < DATE_TRUNC('month', CURRENT_DATE)
+    """)
+    previous = cur.fetchone()
+    
+    current_count = int(current['count'])
+    current_amount = float(current['total_amount'])
+    previous_count = int(previous['count'])
+    previous_amount = float(previous['total_amount'])
+    
+    count_diff = current_count - previous_count
+    amount_diff = current_amount - previous_amount
+    
+    count_percent = (count_diff / previous_count * 100) if previous_count > 0 else 0
+    amount_percent = (amount_diff / previous_amount * 100) if previous_amount > 0 else 0
+    
+    return {
+        'current_month': {
+            'count': current_count,
+            'total_amount': current_amount
+        },
+        'previous_month': {
+            'count': previous_count,
+            'total_amount': previous_amount
+        },
+        'difference': {
+            'count': count_diff,
+            'count_percent': round(count_percent, 2),
+            'amount': amount_diff,
+            'amount_percent': round(amount_percent, 2)
+        }
+    }
 
 def response_json(status_code: int, data: Dict[str, Any]) -> Dict[str, Any]:
     return {

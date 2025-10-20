@@ -22,11 +22,47 @@ export default function WebhooksTab({ webhooks, loading }: WebhooksTabProps) {
     }).format(date);
   };
 
+  const getResponseBadge = (webhook: Webhook) => {
+    if (webhook.purchase_created) {
+      return (
+        <Badge className="bg-green-500 text-white gap-1">
+          <Icon name="CheckCircle2" size={12} />
+          Закупка создана
+        </Badge>
+      );
+    }
+    
+    if (webhook.response_status === 'error') {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <Icon name="XCircle" size={12} />
+          Ошибка
+        </Badge>
+      );
+    }
+    
+    if (webhook.response_status === 'success') {
+      return (
+        <Badge className="bg-blue-500 text-white gap-1">
+          <Icon name="Info" size={12} />
+          Обработан
+        </Badge>
+      );
+    }
+    
+    return (
+      <Badge variant="outline" className="gap-1">
+        <Icon name="Clock" size={12} />
+        Ожидает
+      </Badge>
+    );
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Журнал вебхуков</CardTitle>
-        <CardDescription>Все входящие запросы от Битрикс24</CardDescription>
+        <CardDescription>Все входящие запросы от Битрикс24 и результаты их обработки</CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -44,9 +80,10 @@ export default function WebhooksTab({ webhooks, loading }: WebhooksTabProps) {
               <TableRow>
                 <TableHead>Тип</TableHead>
                 <TableHead>ID сделки</TableHead>
+                <TableHead>Результат</TableHead>
+                <TableHead>Сообщение</TableHead>
                 <TableHead className="text-right">Товаров</TableHead>
                 <TableHead className="text-right">Сумма</TableHead>
-                <TableHead>Источник</TableHead>
                 <TableHead>Время</TableHead>
               </TableRow>
             </TableHeader>
@@ -59,12 +96,24 @@ export default function WebhooksTab({ webhooks, loading }: WebhooksTabProps) {
                   <TableCell>
                     <Badge variant="outline">#{webhook.deal_id}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">{webhook.products_count}</TableCell>
-                  <TableCell className="text-right font-semibold">
-                    {Number(webhook.total_amount).toLocaleString('ru-RU')} ₽
+                  <TableCell>
+                    {getResponseBadge(webhook)}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
-                    {webhook.source_info}
+                  <TableCell className="max-w-xs">
+                    <div className="flex flex-col gap-1">
+                      {webhook.response_message && (
+                        <span className="text-xs text-foreground">
+                          {webhook.response_message}
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground truncate">
+                        {webhook.source_info}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">{webhook.products_count || 0}</TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {webhook.total_amount ? Number(webhook.total_amount).toLocaleString('ru-RU') + ' ₽' : '—'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(webhook.created_at)}

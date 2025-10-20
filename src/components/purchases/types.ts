@@ -28,4 +28,24 @@ export interface Webhook {
   total_amount: number;
   created_at: string;
   source_info: string;
+  response_status?: string;
+  response_message?: string;
+  purchase_created?: boolean;
+}
+
+export interface MonthlyStats {
+  current_month: {
+    count: number;
+    total_amount: number;
+  };
+  previous_month: {
+    count: number;
+    total_amount: number;
+  };
+  difference: {
+    count: number;
+    count_percent: number;
+    amount: number;
+    amount_percent: number;
+  };
 }

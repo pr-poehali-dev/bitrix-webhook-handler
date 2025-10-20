@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import CreatePurchaseTab from '@/components/purchases/CreatePurchaseTab';
 import PurchasesMonitorTab from '@/components/purchases/PurchasesMonitorTab';
 import WebhooksTab from '@/components/purchases/WebhooksTab';
-import { Purchase, Webhook } from '@/components/purchases/types';
+import { Purchase, Webhook, MonthlyStats } from '@/components/purchases/types';
 
 const API_URL = 'https://functions.poehali.dev/73ea551a-feab-4417-92c3-dd78ca56946b';
 const WEBHOOK_URL = 'https://functions.poehali.dev/81376a34-1578-43f3-966a-793d36df08f1';
@@ -17,6 +17,7 @@ export default function Purchases() {
   const { toast } = useToast();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [loadingMonitor, setLoadingMonitor] = useState(true);
 
   useEffect(() => {
@@ -27,13 +28,15 @@ export default function Purchases() {
 
   const fetchMonitorData = async () => {
     try {
-      const [purchasesRes, webhooksRes] = await Promise.all([
+      const [purchasesRes, webhooksRes, statsRes] = await Promise.all([
         fetch(`${API_URL}?action=list_purchases`),
-        fetch(`${API_URL}?action=list_webhooks`)
+        fetch(`${API_URL}?action=list_webhooks`),
+        fetch(`${API_URL}?action=stats`)
       ]);
       
       const purchasesData = await purchasesRes.json();
       const webhooksData = await webhooksRes.json();
+      const statsData = await statsRes.json();
       
       if (purchasesData.success) {
         setPurchases(purchasesData.purchases || []);
@@ -41,6 +44,10 @@ export default function Purchases() {
       
       if (webhooksData.success) {
         setWebhooks(webhooksData.webhooks || []);
+      }
+      
+      if (statsData.success && statsData.stats) {
+        setStats(statsData.stats);
       }
     } catch (error) {
       console.error('Error fetching monitor data:', error);
@@ -100,7 +107,7 @@ export default function Purchases() {
           </TabsContent>
 
           <TabsContent value="monitor" className="mt-6">
-            <PurchasesMonitorTab purchases={purchases} loading={loadingMonitor} />
+            <PurchasesMonitorTab purchases={purchases} loading={loadingMonitor} stats={stats} />
           </TabsContent>
 
           <TabsContent value="webhooks" className="mt-6">
