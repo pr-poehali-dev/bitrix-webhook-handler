@@ -347,30 +347,32 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
             print(f"ERROR: Ошибка добавления товаров HTTP {e.code}: {error_body}")
         except Exception as e:
             print(f"ERROR: Ошибка добавления товаров: {str(e)}")
-            # Если не удалось добавить товары, добавляем хотя бы комментарий
-            try:
-                comment_text = f"Товары из сделки #{deal_id}:\n\n{products_text}\n\nИтого: {total_amount:,.0f} ₽\n\nОшибка добавления товаров: {str(e)}"
-                
-                comment_api_url = f"{webhook_url}crm.timeline.comment.add.json"
-                comment_params = {
-                    'fields': {
-                        'ENTITY_ID': int(purchase_id),
-                        'ENTITY_TYPE': f'dynamic_{entity_type_id}',
-                        'COMMENT': comment_text
-                    }
+        
+        # Добавляем товары комментарием в таймлайн (так как productRows не работает для смарт-процессов)
+        try:
+            comment_text = f"📦 Товары из сделки #{deal_id}:\n\n{products_text}\n\n💰 Итого: {total_amount:,.0f} ₽"
+            
+            comment_api_url = f"{webhook_url}crm.timeline.comment.add.json"
+            comment_params = {
+                'fields': {
+                    'ENTITY_ID': int(purchase_id),
+                    'ENTITY_TYPE': f'dynamic_{entity_type_id}',
+                    'COMMENT': comment_text
                 }
-                
-                comment_data = json.dumps(comment_params).encode('utf-8')
-                comment_req = urllib.request.Request(
-                    comment_api_url,
-                    data=comment_data,
-                    headers={'Content-Type': 'application/json'}
-                )
-                
-                with urllib.request.urlopen(comment_req, timeout=10) as comment_response:
-                    comment_result = json.loads(comment_response.read().decode('utf-8'))
-            except:
-                pass
+            }
+            
+            comment_data = json.dumps(comment_params).encode('utf-8')
+            comment_req = urllib.request.Request(
+                comment_api_url,
+                data=comment_data,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            with urllib.request.urlopen(comment_req, timeout=10) as comment_response:
+                comment_result = json.loads(comment_response.read().decode('utf-8'))
+                print(f"DEBUG: Комментарий добавлен: {comment_result}")
+        except Exception as e:
+            print(f"ERROR: Не удалось добавить комментарий: {str(e)}")
         
         return {'purchase_id': purchase_id}
         
