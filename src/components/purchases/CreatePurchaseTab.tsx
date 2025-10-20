@@ -75,7 +75,20 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
       setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
     };
     
-    addLog('Отправка запроса на создание закупки...');
+    addLog(`📦 Создание закупки по сделке #${dealId}`);
+    addLog(`📋 Товаров к переносу: ${products.length}`);
+    addLog('');
+    
+    products.forEach((product, idx) => {
+      addLog(`  ${idx + 1}. ${product.name}`);
+      addLog(`     ID: ${product.id} | ${product.quantity} ${product.measure} × ${product.price.toLocaleString('ru-RU')} ₽ = ${product.total.toLocaleString('ru-RU')} ₽`);
+    });
+    
+    const totalSum = products.reduce((sum, p) => sum + p.total, 0);
+    addLog('');
+    addLog(`💰 Общая сумма: ${totalSum.toLocaleString('ru-RU')} ₽`);
+    addLog('');
+    addLog('🚀 Отправка запроса в Битрикс24...');
     
     try {
       const controller = new AbortController();
