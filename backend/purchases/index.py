@@ -360,15 +360,27 @@ def create_purchase_in_crm(webhook_url: str, deal_id: str, products: List[Dict[s
                 }
             
             purchase_id = result['result'].get('item', {}).get('id', '')
+            created_item = result['result'].get('item', {})
             
             print(f"[DEBUG] Purchase created with ID: {purchase_id}")
+            print(f"[DEBUG] ===== СОЗДАННАЯ ЗАКУПКА В БИТРИКС24 =====")
+            print(f"[DEBUG] ID закупки: {purchase_id}")
+            print(f"[DEBUG] Название: {title}")
+            print(f"[DEBUG] Поля закупки:")
+            print(json.dumps(created_item, ensure_ascii=False, indent=2))
+            print(f"[DEBUG] Товары в закупке ({len(products)} шт.):")
+            for idx, p in enumerate(products, 1):
+                print(f"[DEBUG]   {idx}. {p.get('name')} - {p.get('quantity')} {p.get('measure')} x {p.get('price')} руб. = {p.get('total')} руб.")
+            print(f"[DEBUG] ==========================================")
             
             return {
                 'success': True,
                 'purchase_id': purchase_id,
                 'deal_id': deal_id,
                 'title': title,
-                'message': 'Закупка успешно создана в ЦРМ Обеспечение'
+                'message': 'Закупка успешно создана в ЦРМ Обеспечение',
+                'created_item_fields': created_item,
+                'products_sent': products
             }
     
     except Exception as e:
