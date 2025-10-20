@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { Product } from './types';
+import WebhookSetupCard from './WebhookSetupCard';
 
 interface CreatePurchaseTabProps {
   apiUrl: string;
@@ -205,23 +206,7 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
         </Card>
       )}
 
-      <Card className="border-blue-200 bg-blue-50/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-blue-900">
-            <Icon name="Info" size={20} />
-            Как это работает
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-blue-800 space-y-2">
-          <p><strong>1. Вебхук из Битрикс24:</strong> При создании сделки отправляется вебхук с ID сделки на этот API</p>
-          <p><strong>2. Получение товаров:</strong> Система загружает список товаров через crm.deal.productrows.get</p>
-          <p><strong>3. Создание закупки:</strong> Товары отправляются в смарт-процесс "Обеспечение" в Битрикс24</p>
-          <p className="pt-2 border-t border-blue-200">
-            <strong>URL для вебхука:</strong>{' '}
-            <code className="bg-blue-100 px-2 py-1 rounded text-xs">{apiUrl}</code>
-          </p>
-        </CardContent>
-      </Card>
+      <WebhookSetupCard apiUrl={apiUrl} />
     </div>
   );
 }
