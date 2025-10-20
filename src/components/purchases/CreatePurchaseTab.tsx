@@ -7,9 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { Product } from './types';
-import WebhookSetupCard from './WebhookSetupCard';
-import BitrixWebhookSetup from './BitrixWebhookSetup';
-import SecretSetupCard from './SecretSetupCard';
+import HelpDialog from './HelpDialog';
 
 interface CreatePurchaseTabProps {
   apiUrl: string;
@@ -98,10 +96,15 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Получить товары по сделке</CardTitle>
-          <CardDescription>
-            Введите ID сделки из Битрикс24, чтобы загрузить список товаров
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle>Получить товары по сделке</CardTitle>
+              <CardDescription>
+                Введите ID сделки из Битрикс24, чтобы загрузить список товаров
+              </CardDescription>
+            </div>
+            <HelpDialog apiUrl={apiUrl} />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-4">
@@ -207,12 +210,6 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
           </CardContent>
         </Card>
       )}
-
-      <SecretSetupCard />
-      
-      <BitrixWebhookSetup />
-      
-      <WebhookSetupCard apiUrl={apiUrl} />
     </div>
   );
 }
