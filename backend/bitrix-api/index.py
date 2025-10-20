@@ -30,17 +30,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
-    bitrix_webhook_url = os.environ.get('BITRIX24_WEBHOOK_URL', '')
-    smart_process_id = os.environ.get('SMART_PROCESS_PURCHASES_ID', '')
-    
-    if not bitrix_webhook_url:
+    try:
+        bitrix_webhook_url = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+        smart_process_id = os.environ.get('SMART_PROCESS_PURCHASES_ID', '')
+        
+        if not bitrix_webhook_url:
+            return response_json(500, {
+                'success': False,
+                'error': 'BITRIX24_WEBHOOK_URL not configured'
+            })
+        
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+    except Exception as e:
         return response_json(500, {
             'success': False,
-            'error': 'BITRIX24_WEBHOOK_URL not configured'
+            'error': f'Initialization error: {str(e)}'
         })
-    
-    conn = psycopg2.connect(os.environ['DATABASE_URL'])
-    cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
         if method == 'GET':
