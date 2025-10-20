@@ -250,14 +250,12 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
             for i, p in enumerate(products)
         ])
         
+        # Используем только обязательное поле title
+        # Все остальные данные сохраняются в БД
         params = {
             'entityTypeId': entity_type_id,
             'fields': {
-                'title': f'Закупка по сделке #{deal_id}',
-                'ufCrm_1_DEAL_ID': deal_id,
-                'ufCrm_1_TOTAL_AMOUNT': total_amount,
-                'ufCrm_1_PRODUCTS': products_text,
-                'ufCrm_1_STATUS': 'new'
+                'title': f'Закупка по сделке #{deal_id} на сумму {total_amount:,.0f} ₽ ({len(products)} товаров)'
             }
         }
         
