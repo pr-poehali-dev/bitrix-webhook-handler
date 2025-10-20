@@ -52,35 +52,37 @@ export default function BitrixWebhookSetup() {
             2. Необходимые права доступа (Permissions)
           </h3>
           
-          <div className="space-y-4">
-            {/* CRM права */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge className="bg-blue-500">CRM</Badge>
-                <span className="text-sm font-medium text-green-900">Права для работы со сделками</span>
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border-2 border-blue-300">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-blue-500 rounded-lg">
+                <Icon name="CheckCircle2" size={24} className="text-white" />
               </div>
-              <ul className="space-y-1.5 ml-4">
-                <li className="flex items-center gap-2 text-sm">
-                  <Icon name="CheckCircle2" size={14} className="text-green-600" />
-                  <code className="bg-green-100 px-2 py-0.5 rounded text-xs">crm</code>
-                  <span className="text-green-700">— Общий доступ к CRM</span>
-                </li>
-              </ul>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge className="bg-blue-600 text-white">Достаточно одного права!</Badge>
+                </div>
+                <div className="bg-white p-3 rounded border border-blue-200 mb-2">
+                  <code className="text-lg font-bold text-blue-900">CRM</code>
+                </div>
+                <p className="text-sm text-blue-900 font-medium mb-2">
+                  ✅ Это право даёт доступ ко всем необходимым методам:
+                </p>
+                <ul className="space-y-1 text-sm text-blue-800 ml-4">
+                  <li>• Чтение информации о сделках</li>
+                  <li>• Получение списка товаров</li>
+                  <li>• Создание элементов смарт-процессов</li>
+                </ul>
+              </div>
             </div>
+          </div>
 
-            {/* Смарт-процессы */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge className="bg-purple-500">Смарт-процессы</Badge>
-                <span className="text-sm font-medium text-green-900">Для создания закупок</span>
-              </div>
-              <ul className="space-y-1.5 ml-4">
-                <li className="flex items-center gap-2 text-sm">
-                  <Icon name="CheckCircle2" size={14} className="text-green-600" />
-                  <code className="bg-green-100 px-2 py-0.5 rounded text-xs">crm</code>
-                  <span className="text-green-700">— Создание элементов смарт-процессов</span>
-                </li>
-              </ul>
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded p-3">
+            <div className="flex gap-2 text-sm text-amber-900">
+              <Icon name="Info" size={16} className="flex-shrink-0 mt-0.5" />
+              <p>
+                <strong>Важно:</strong> В Битрикс24 при создании входящего вебхука просто отметьте галочкой <strong>"CRM"</strong> в списке прав. 
+                Не нужно выбирать отдельные методы — все необходимые методы API будут доступны автоматически.
+              </p>
             </div>
           </div>
         </div>
