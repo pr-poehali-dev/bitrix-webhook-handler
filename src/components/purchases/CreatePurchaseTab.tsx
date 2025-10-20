@@ -69,6 +69,9 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
 
     setCreating(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -79,7 +82,10 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
           deal_id: dealId,
           products: products,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -101,7 +107,11 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
       }
     } catch (error) {
       console.error('Error creating purchase:', error);
-      onShowToast('Ошибка', 'Ошибка подключения к серверу', 'destructive');
+      if (error instanceof Error && error.name === 'AbortError') {
+        onShowToast('Таймаут', 'Запрос занял слишком много времени. Проверьте настройки Битрикс24 или повторите позже.', 'destructive');
+      } else {
+        onShowToast('Ошибка', 'Ошибка подключения к серверу. Проверьте консоль браузера для деталей.', 'destructive');
+      }
     } finally {
       setCreating(false);
     }
