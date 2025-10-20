@@ -87,7 +87,17 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
 
       clearTimeout(timeoutId);
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        const responseText = await response.text();
+        console.error('Failed to parse response as JSON:', responseText);
+        onShowToast('Ошибка сервера', `HTTP ${response.status}: ${responseText.substring(0, 200)}`, 'destructive');
+        return;
+      }
+
+      console.log('Create purchase response:', data);
 
       if (data.success) {
         onShowToast('✅ Закупка создана', `ID закупки: ${data.purchase_id}`);
@@ -97,12 +107,14 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
       } else {
         const errorMsg = data.error || 'Не удалось создать закупку';
         
+        console.error('Purchase creation error:', errorMsg);
+        
         if (errorMsg.includes('BITRIX24_WEBHOOK_URL') || errorMsg.includes('not configured')) {
           onShowToast('Настройте секреты', 'Необходимо указать URL вебхука Битрикс24 в настройках проекта', 'destructive');
         } else if (errorMsg.includes('SMART_PROCESS_PURCHASES_ID')) {
           onShowToast('Настройте секреты', 'Необходимо указать ID смарт-процесса в настройках проекта', 'destructive');
         } else {
-          onShowToast('Ошибка', errorMsg, 'destructive');
+          onShowToast('Ошибка Битрикс24', errorMsg, 'destructive');
         }
       }
     } catch (error) {
