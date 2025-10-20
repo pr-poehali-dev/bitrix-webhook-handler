@@ -252,15 +252,22 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         # Используем только обязательное поле title
         # Все остальные данные сохраняются в БД
+        title = f'Закупка по сделке #{deal_id} на сумму {total_amount:,.0f} ₽ ({len(products)} товаров)'
+        
         params = {
-            'entityTypeId': entity_type_id,
+            'entityTypeId': int(entity_type_id),
             'fields': {
-                'title': f'Закупка по сделке #{deal_id} на сумму {total_amount:,.0f} ₽ ({len(products)} товаров)'
+                'title': title
             }
         }
         
-        data = urllib.parse.urlencode({'fields': json.dumps(params['fields']), 'entityTypeId': entity_type_id}).encode('utf-8')
-        req = urllib.request.Request(api_url, data=data)
+        # Отправляем как JSON в теле запроса
+        json_data = json.dumps(params).encode('utf-8')
+        req = urllib.request.Request(
+            api_url,
+            data=json_data,
+            headers={'Content-Type': 'application/json'}
+        )
         
         with urllib.request.urlopen(req, timeout=10) as response:
             result = json.loads(response.read().decode('utf-8'))
