@@ -309,10 +309,6 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
             
             product_rows = []
             for product in products:
-                # Пропускаем услуги (type = 4)
-                if product.get('isService', False):
-                    continue
-                
                 product_rows.append({
                     'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
                     'productName': product['name'],
