@@ -267,15 +267,27 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         with urllib.request.urlopen(req, timeout=10) as response:
             result = json.loads(response.read().decode('utf-8'))
         
+        if 'error' in result:
+            error_msg = result.get('error_description', result.get('error', 'Unknown Bitrix24 error'))
+            return {'error': f'Битрикс24: {error_msg}'}
+        
         if 'result' not in result or 'item' not in result['result']:
-            return {'error': 'Failed to create purchase in Bitrix24'}
+            return {'error': f'Некорректный ответ Битрикс24: {json.dumps(result)}'}
         
         purchase_id = str(result['result']['item']['id'])
         
         return {'purchase_id': purchase_id}
         
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else ''
+        try:
+            error_data = json.loads(error_body)
+            error_msg = error_data.get('error_description', error_data.get('error', error_body))
+        except:
+            error_msg = error_body or str(e)
+        return {'error': f'Битрикс24 HTTP {e.code}: {error_msg}'}
     except Exception as e:
-        return {'error': f'Bitrix24 API error: {str(e)}'}
+        return {'error': f'Ошибка API: {str(e)}'}
 
 def calculate_monthly_stats(cur) -> Dict[str, Any]:
     """Calculate purchase statistics for current and previous month"""
