@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { Product } from './types';
 import WebhookSetupCard from './WebhookSetupCard';
+import BitrixWebhookSetup from './BitrixWebhookSetup';
 
 interface CreatePurchaseTabProps {
   apiUrl: string;
@@ -207,6 +208,8 @@ export default function CreatePurchaseTab({ apiUrl, onPurchaseCreated, onShowToa
       )}
 
       <WebhookSetupCard apiUrl={apiUrl} />
+      
+      <BitrixWebhookSetup />
     </div>
   );
 }
