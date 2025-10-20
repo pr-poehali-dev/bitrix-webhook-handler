@@ -302,31 +302,29 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         
         purchase_id = str(result['result']['item']['id'])
         
-        # Добавляем товары и услуги в закупку
+        # Добавляем товары и услуги в закупку через crm.item.productrow.add
         products_added = False
         try:
-            productrows_api_url = f"{webhook_url}crm.item.productrow.set.json"
+            print(f"DEBUG: Товаров для добавления: {len(products)}")
             
-            product_rows = []
+            # Добавляем каждый товар отдельным запросом
             for product in products:
-                product_rows.append({
-                    'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
-                    'productName': product['name'],
-                    'price': float(product['price']),
-                    'quantity': float(product['quantity']),
-                    'measureCode': int(product.get('measureCode', 796)),
-                    'measureName': product['measure']
-                })
-            
-            print(f"DEBUG: Товаров для добавления: {len(product_rows)}")
-            
-            if product_rows:
+                productrows_api_url = f"{webhook_url}crm.item.productrow.add.json"
+                
                 productrows_params = {
-                    'id': int(purchase_id),
-                    'ownerType': f'dynamic_{entity_type_id}',
-                    'ownerEntityTypeId': int(entity_type_id),
-                    'productRows': product_rows
+                    'fields': {
+                        'ownerId': int(purchase_id),
+                        'ownerType': f'Tb{entity_type_id}',  # Формат для смарт-процессов: Tb + entityTypeId
+                        'productId': int(product['id']) if product['id'] and product['id'].isdigit() else 0,
+                        'productName': product['name'],
+                        'price': float(product['price']),
+                        'quantity': float(product['quantity']),
+                        'measureCode': int(product.get('measureCode', 796)),
+                        'measureName': product['measure']
+                    }
                 }
+                
+                print(f"DEBUG: Добавляем товар: {product['name']}, params: {json.dumps(productrows_params, ensure_ascii=False)}")
                 
                 productrows_data = json.dumps(productrows_params).encode('utf-8')
                 productrows_req = urllib.request.Request(
@@ -337,12 +335,12 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
                 
                 with urllib.request.urlopen(productrows_req, timeout=10) as productrows_response:
                     productrows_result = json.loads(productrows_response.read().decode('utf-8'))
-                    print(f"DEBUG: Результат добавления товаров: {productrows_result}")
-                    products_added = True
+                    print(f"DEBUG: Результат добавления товара {product['name']}: {productrows_result}")
+            
+            products_added = True
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8') if e.fp else ''
             print(f"ERROR: Ошибка добавления товаров HTTP {e.code}: {error_body}")
-            print(f"DEBUG: Отправленные данные: {json.dumps(productrows_params, ensure_ascii=False)}")
         except Exception as e:
             print(f"ERROR: Ошибка добавления товаров: {str(e)}")
             # Если не удалось добавить товары, добавляем хотя бы комментарий
