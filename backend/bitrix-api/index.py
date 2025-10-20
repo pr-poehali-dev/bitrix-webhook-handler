@@ -287,6 +287,7 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
         purchase_id = str(result['result']['item']['id'])
         
         # Добавляем товары в закупку (только товары, не услуги)
+        products_added = False
         try:
             productrows_api_url = f"{webhook_url}crm.item.productrow.set.json"
             
@@ -305,6 +306,8 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
                     'measureName': product['measure']
                 })
             
+            print(f"DEBUG: Товаров для добавления: {len(product_rows)}")
+            
             if product_rows:
                 productrows_params = {
                     'id': int(purchase_id),
@@ -321,7 +324,10 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
                 
                 with urllib.request.urlopen(productrows_req, timeout=10) as productrows_response:
                     productrows_result = json.loads(productrows_response.read().decode('utf-8'))
+                    print(f"DEBUG: Результат добавления товаров: {productrows_result}")
+                    products_added = True
         except Exception as e:
+            print(f"ERROR: Ошибка добавления товаров: {str(e)}")
             # Если не удалось добавить товары, добавляем хотя бы комментарий
             try:
                 comment_text = f"Товары из сделки #{deal_id}:\n\n{products_text}\n\nИтого: {total_amount:,.0f} ₽\n\nОшибка добавления товаров: {str(e)}"
