@@ -323,7 +323,8 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
             if product_rows:
                 productrows_params = {
                     'id': int(purchase_id),
-                    'entityTypeId': int(entity_type_id),
+                    'ownerType': f'dynamic_{entity_type_id}',
+                    'ownerEntityTypeId': int(entity_type_id),
                     'productRows': product_rows
                 }
                 
