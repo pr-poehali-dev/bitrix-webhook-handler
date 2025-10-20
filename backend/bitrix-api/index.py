@@ -327,9 +327,9 @@ def create_purchase_in_bitrix(webhook_url: str, entity_type_id: str, deal_id: st
             # Используем метод crm.item.productrow.set
             productrow_api_url = f"{webhook_url}crm.item.productrow.set.json"
             productrow_params = {
-                'entityTypeId': int(entity_type_id),
-                'id': int(purchase_id),
-                'rows': product_rows
+                'ownerType': f'Tb{entity_type_id}',  # Формат: Tb{entityTypeId} для смарт-процессов
+                'ownerId': int(purchase_id),
+                'productRows': product_rows
             }
             
             print(f"DEBUG: Устанавливаем товарные позиции: {json.dumps(productrow_params, ensure_ascii=False)}")
