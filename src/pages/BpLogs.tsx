@@ -21,6 +21,25 @@ interface BpLog {
   last_activity: string;
 }
 
+interface BpDetail {
+  id: string;
+  template_id: string;
+  template_name: string;
+  document_id: string | string[];
+  started: string;
+  started_by: string;
+  status: string;
+  modified: string;
+  workflow_status: Record<string, any>;
+  tasks: Array<{
+    id: string;
+    name: string;
+    status: string;
+    modified: string;
+    user_id: string;
+  }>;
+}
+
 const BpLogs = () => {
   const [logs, setLogs] = useState<BpLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +48,9 @@ const BpLogs = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedBp, setSelectedBp] = useState<string | null>(null);
+  const [bpDetail, setBpDetail] = useState<BpDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const { toast } = useToast();
 
   const BACKEND_URL = 'https://functions.poehali.dev/f6e71011-6a3a-4e15-b54b-774b4357063f';
@@ -118,6 +140,34 @@ const BpLogs = () => {
     } catch {
       return dateString;
     }
+  };
+
+  const fetchBpDetail = async (bpId: string) => {
+    setDetailLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/detail?id=${bpId}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Ошибка загрузки деталей');
+      }
+
+      setBpDetail(data);
+      setSelectedBp(bpId);
+    } catch (err: any) {
+      toast({
+        title: 'Ошибка',
+        description: err.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeBpDetail = () => {
+    setSelectedBp(null);
+    setBpDetail(null);
   };
 
   return (
@@ -266,6 +316,18 @@ const BpLogs = () => {
                             <span>Пользователь: {log.user_id || 'Неизвестно'}</span>
                           </div>
                         </div>
+                        
+                        {!log.id.startsWith('template_') && (
+                          <Button 
+                            onClick={() => fetchBpDetail(log.id)} 
+                            variant="outline" 
+                            size="sm"
+                            className="mt-2"
+                          >
+                            <Icon name="Eye" size={14} className="mr-2" />
+                            Посмотреть детали
+                          </Button>
+                        )}
 
                         {log.errors && log.errors.length > 0 && (
                           <Alert variant="destructive" className="mt-3">
@@ -288,6 +350,105 @@ const BpLogs = () => {
             </div>
           </CardContent>
         </Card>
+
+        {selectedBp && (
+          <Card className="border-2 border-primary">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Детали бизнес-процесса</CardTitle>
+                <Button onClick={closeBpDetail} variant="ghost" size="sm">
+                  <Icon name="X" size={16} />
+                </Button>
+              </div>
+              <CardDescription>ID: {selectedBp}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {detailLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Icon name="Loader2" size={32} className="animate-spin text-primary" />
+                </div>
+              ) : bpDetail ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold text-slate-600">Шаблон</div>
+                      <div className="text-base">{bpDetail.template_name || 'Неизвестно'}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold text-slate-600">ID шаблона</div>
+                      <div className="text-base font-mono">{bpDetail.template_id}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold text-slate-600">Запущен</div>
+                      <div className="text-base">{formatDate(bpDetail.started)}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold text-slate-600">Изменён</div>
+                      <div className="text-base">{formatDate(bpDetail.modified)}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold text-slate-600">Запустил</div>
+                      <div className="text-base">ID: {bpDetail.started_by}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold text-slate-600">Документ</div>
+                      <div className="text-base font-mono text-xs">
+                        {Array.isArray(bpDetail.document_id) 
+                          ? bpDetail.document_id.join(' / ') 
+                          : bpDetail.document_id}
+                      </div>
+                    </div>
+                  </div>
+
+                  {bpDetail.tasks && bpDetail.tasks.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-lg flex items-center gap-2">
+                        <Icon name="ListChecks" size={18} />
+                        История задач ({bpDetail.tasks.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {bpDetail.tasks.map((task) => (
+                          <Card key={task.id} className="bg-slate-50">
+                            <CardContent className="pt-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="font-medium">{task.name}</div>
+                                  <div className="text-sm text-slate-600 mt-1">
+                                    ID: {task.id} • Пользователь: {task.user_id}
+                                  </div>
+                                  <div className="text-xs text-slate-500 mt-1">
+                                    Изменено: {formatDate(task.modified)}
+                                  </div>
+                                </div>
+                                {getStatusBadge(task.status)}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {bpDetail.workflow_status && Object.keys(bpDetail.workflow_status).length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-lg flex items-center gap-2">
+                        <Icon name="Info" size={18} />
+                        Статус процесса
+                      </h4>
+                      <pre className="bg-slate-50 p-4 rounded-lg text-xs overflow-x-auto">
+                        {JSON.stringify(bpDetail.workflow_status, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  Не удалось загрузить детали
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

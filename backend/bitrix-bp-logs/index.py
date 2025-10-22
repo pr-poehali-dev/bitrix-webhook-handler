@@ -11,6 +11,7 @@ import requests
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     method: str = event.get('httpMethod', 'GET')
+    path: str = event.get('path', '')
     
     if method == 'OPTIONS':
         return {
@@ -32,6 +33,32 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters') or {}
+    
+    # Эндпоинт для детальной информации о БП
+    if '/detail' in path or params.get('id'):
+        bp_id = params.get('id')
+        if not bp_id:
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Параметр id обязателен'})
+            }
+        
+        try:
+            detail = get_bp_detail(bp_id)
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps(detail, ensure_ascii=False)
+            }
+        except Exception as e:
+            return {
+                'statusCode': 500,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': str(e)}, ensure_ascii=False)
+            }
+    
+    # Основной эндпоинт для списка логов
     source = params.get('source', 'api')
     limit = int(params.get('limit', '50'))
     offset = int(params.get('offset', '0'))
@@ -222,6 +249,65 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
             continue
     
     return logs[offset:offset + limit]
+
+def get_bp_detail(bp_id: str) -> Dict[str, Any]:
+    webhook_url = os.environ.get('BITRIX24_WEBHOOK_URL')
+    if not webhook_url:
+        raise ValueError('BITRIX24_WEBHOOK_URL не настроен')
+    
+    webhook_url = webhook_url.rstrip('/')
+    
+    # Получаем детальную информацию о БП
+    detail_response = requests.get(
+        f'{webhook_url}/bizproc.workflow.instance.get',
+        params={'ID': bp_id},
+        timeout=30
+    )
+    detail_response.raise_for_status()
+    detail_data = detail_response.json()
+    
+    if 'error' in detail_data:
+        raise ValueError(f"Ошибка API: {detail_data.get('error_description', 'Неизвестная ошибка')}")
+    
+    bp_info = detail_data.get('result', {})
+    
+    # Получаем задачи БП
+    tasks = []
+    try:
+        tasks_response = requests.get(
+            f'{webhook_url}/bizproc.task.list',
+            params={
+                'FILTER': {'WORKFLOW_ID': bp_id}
+            },
+            timeout=10
+        )
+        if tasks_response.status_code == 200:
+            tasks_data = tasks_response.json()
+            tasks = tasks_data.get('result', [])
+    except:
+        pass
+    
+    return {
+        'id': bp_id,
+        'template_id': bp_info.get('TEMPLATE_ID', ''),
+        'template_name': bp_info.get('TEMPLATE_NAME', 'Неизвестно'),
+        'document_id': bp_info.get('DOCUMENT_ID', ''),
+        'started': bp_info.get('STARTED', ''),
+        'started_by': bp_info.get('STARTED_BY', ''),
+        'status': bp_info.get('STATUS', ''),
+        'modified': bp_info.get('MODIFIED', ''),
+        'workflow_status': bp_info.get('WORKFLOW_STATUS', {}),
+        'tasks': [
+            {
+                'id': task.get('ID', ''),
+                'name': task.get('NAME', 'Без названия'),
+                'status': task.get('STATUS', 'unknown'),
+                'modified': task.get('MODIFIED', ''),
+                'user_id': task.get('USER_ID', '')
+            }
+            for task in tasks
+        ]
+    }
 
 def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:
     import psycopg2
