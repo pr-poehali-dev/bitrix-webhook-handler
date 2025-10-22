@@ -81,13 +81,17 @@ const BpLogs = () => {
   }, [autoRefresh, source, statusFilter, searchQuery]);
 
   const handleViewDetails = async (bpId: string) => {
+    console.log('[handleViewDetails] Клик на:', bpId, 'текущий selectedBp:', selectedBp);
+    
     if (selectedBp === bpId) {
+      console.log('[handleViewDetails] Закрываем карточку');
       setSelectedBp(null);
       setBpDetail(null);
       return;
     }
 
     if (bpId.startsWith('template_')) {
+      console.log('[handleViewDetails] Открываем шаблон');
       setSelectedBp(bpId);
       setDetailLoading(true);
       
