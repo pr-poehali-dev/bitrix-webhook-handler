@@ -96,6 +96,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
         }
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[ERROR] Ошибка получения логов: {e}")
+        print(f"[ERROR] Traceback:\n{error_details}")
         return {
             'statusCode': 500,
             'headers': {
@@ -104,7 +108,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             },
             'body': json.dumps({
                 'error': str(e),
-                'message': 'Ошибка получения логов'
+                'message': 'Ошибка получения логов',
+                'traceback': error_details
             })
         }
 
