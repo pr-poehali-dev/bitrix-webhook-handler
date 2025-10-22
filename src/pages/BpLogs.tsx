@@ -92,7 +92,7 @@ const BpLogs = () => {
       setDetailLoading(true);
       
       try {
-        const response = await fetch(`${BACKEND_URL}/detail?id=${bpId}`);
+        const response = await fetch(`${BACKEND_URL}?id=${bpId}`);
         const data = await response.json();
 
         if (!response.ok) {
@@ -118,7 +118,7 @@ const BpLogs = () => {
     setDetailLoading(true);
     
     try {
-      const response = await fetch(`${BACKEND_URL}/detail?id=${bpId}`);
+      const response = await fetch(`${BACKEND_URL}?id=${bpId}`);
       const data = await response.json();
 
       if (!response.ok) {
