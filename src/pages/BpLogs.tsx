@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 import { BpLog, BpDetail } from '@/components/bp-logs/types';
 import BpLogsFilters from '@/components/bp-logs/BpLogsFilters';
 import BpLogsList from '@/components/bp-logs/BpLogsList';
-import BpDetailView from '@/components/bp-logs/BpDetailView';
 
 const BpLogs = () => {
   const [logs, setLogs] = useState<BpLog[]>([]);
@@ -81,8 +80,16 @@ const BpLogs = () => {
     return () => clearInterval(interval);
   }, [autoRefresh, source, statusFilter, searchQuery]);
 
-  const fetchBpDetail = async (bpId: string) => {
+  const handleViewDetails = async (bpId: string) => {
+    if (selectedBp === bpId) {
+      setSelectedBp(null);
+      setBpDetail(null);
+      return;
+    }
+
+    setSelectedBp(bpId);
     setDetailLoading(true);
+    
     try {
       const response = await fetch(`${BACKEND_URL}/detail?id=${bpId}`);
       const data = await response.json();
@@ -92,21 +99,17 @@ const BpLogs = () => {
       }
 
       setBpDetail(data);
-      setSelectedBp(bpId);
     } catch (err: any) {
       toast({
         title: 'Ошибка',
         description: err.message,
         variant: 'destructive',
       });
+      setSelectedBp(null);
+      setBpDetail(null);
     } finally {
       setDetailLoading(false);
     }
-  };
-
-  const closeBpDetail = () => {
-    setSelectedBp(null);
-    setBpDetail(null);
   };
 
   return (
@@ -146,16 +149,11 @@ const BpLogs = () => {
         <BpLogsList
           logs={logs}
           loading={loading}
-          onViewDetails={fetchBpDetail}
+          selectedBp={selectedBp}
+          bpDetail={bpDetail}
+          detailLoading={detailLoading}
+          onViewDetails={handleViewDetails}
         />
-
-        {selectedBp && (
-          <BpDetailView
-            bpDetail={bpDetail}
-            loading={detailLoading}
-            onClose={closeBpDetail}
-          />
-        )}
       </div>
     </div>
   );
