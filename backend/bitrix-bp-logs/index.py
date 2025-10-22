@@ -400,7 +400,7 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     
     recent_runs = sorted(instances, key=lambda x: x.get('STARTED', ''), reverse=True)[:10]
     
-    return {
+    result = {
         'id': f'template_{template_id}',
         'template_id': template_id,
         'template_name': template_info.get('NAME', 'Неизвестно'),
@@ -432,6 +432,9 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
             ]
         }
     }
+    
+    print(f"[DEBUG] Возвращаем данные шаблона: id={result['id']}, total_runs={result['stats']['total_runs']}")
+    return result
 
 def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:
     import psycopg2
