@@ -360,7 +360,9 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     
     template_response = requests.post(
         f'{webhook_url}/bizproc.workflow.template.list',
-        json={},
+        json={
+            'SELECT': ['ID', 'NAME', 'DESCRIPTION', 'MODIFIED', 'USER_ID', 'DOCUMENT_TYPE']
+        },
         timeout=30
     )
     template_response.raise_for_status()
