@@ -20,6 +20,11 @@ interface DealChange {
   event_type: string;
   deal_data: any;
   timestamp_received: string;
+  modifier_user_id?: string;
+  modifier_user_name?: string;
+  previous_stage?: string;
+  current_stage?: string;
+  changes_summary?: any;
 }
 
 const BACKEND_URL = 'https://functions.poehali.dev/fa7ea1c4-cbac-4964-b75e-c5b527e353c7';
@@ -116,6 +121,30 @@ export default function DealChanges() {
     );
   };
 
+  const renderChangeSummary = (change: DealChange) => {
+    if (change.changes_summary?.stage) {
+      const { from, to } = change.changes_summary.stage;
+      return (
+        <div className="flex items-center gap-2">
+          {getStageBadge(from)}
+          <Icon name="ArrowRight" size={14} className="text-slate-400" />
+          {getStageBadge(to)}
+        </div>
+      );
+    }
+    
+    if (change.current_stage && !change.previous_stage) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500 text-xs">Новая:</span>
+          {getStageBadge(change.current_stage)}
+        </div>
+      );
+    }
+    
+    return <span className="text-slate-400 text-xs">—</span>;
+  };
+
   const filteredChanges = changes.filter((change) => {
     if (!searchQuery.trim()) return true;
     const search = searchQuery.toLowerCase();
@@ -167,7 +196,7 @@ export default function DealChanges() {
             <div className="flex gap-4">
               <div className="flex-1">
                 <Input
-                  placeholder="Поиск по ID, названию или стадии..."
+                  placeholder="Поиск по ID, названию, стадии или имени пользователя..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
@@ -206,10 +235,10 @@ export default function DealChanges() {
                       <TableHead className="w-20">ID</TableHead>
                       <TableHead className="w-24">Сделка</TableHead>
                       <TableHead>Название</TableHead>
-                      <TableHead className="w-32">Стадия</TableHead>
+                      <TableHead className="w-48">Изменение</TableHead>
+                      <TableHead className="w-40">Пользователь</TableHead>
                       <TableHead className="w-28">Сумма</TableHead>
                       <TableHead className="w-44">Время изменения</TableHead>
-                      <TableHead className="w-32">Событие</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -223,7 +252,17 @@ export default function DealChanges() {
                             {dealData.TITLE || '—'}
                           </TableCell>
                           <TableCell>
-                            {dealData.STAGE_ID ? getStageBadge(dealData.STAGE_ID) : '—'}
+                            {renderChangeSummary(change)}
+                          </TableCell>
+                          <TableCell>
+                            {change.modifier_user_name ? (
+                              <div className="flex items-center gap-2">
+                                <Icon name="User" size={14} className="text-slate-400" />
+                                <span className="text-sm">{change.modifier_user_name}</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-xs">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-semibold">
                             {dealData.OPPORTUNITY && dealData.CURRENCY_ID
@@ -232,11 +271,6 @@ export default function DealChanges() {
                           </TableCell>
                           <TableCell className="text-xs text-slate-600">
                             {formatDate(change.timestamp_received)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {change.event_type.replace('ONCRM', '')}
-                            </Badge>
                           </TableCell>
                         </TableRow>
                       );

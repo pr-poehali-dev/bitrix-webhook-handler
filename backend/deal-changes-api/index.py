@@ -48,7 +48,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     conn = psycopg2.connect(dsn)
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     
-    query = "SELECT id, deal_id, event_type, deal_data, timestamp_received FROM deal_changes WHERE 1=1"
+    query = """
+        SELECT 
+            id, deal_id, event_type, deal_data, timestamp_received,
+            modifier_user_id, modifier_user_name, 
+            previous_stage, current_stage, changes_summary
+        FROM deal_changes 
+        WHERE 1=1
+    """
     query_params = []
     
     if deal_id:
@@ -56,7 +63,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     if search:
         search_escaped = search.replace("'", "''")
-        query += f" AND (deal_id LIKE '%{search_escaped}%' OR deal_data::text LIKE '%{search_escaped}%')"
+        query += f" AND (deal_id LIKE '%{search_escaped}%' OR deal_data::text LIKE '%{search_escaped}%' OR modifier_user_name LIKE '%{search_escaped}%')"
     
     query += f" ORDER BY timestamp_received DESC LIMIT {limit} OFFSET {offset}"
     
@@ -73,7 +80,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'deal_id': row['deal_id'],
             'event_type': row['event_type'],
             'deal_data': row['deal_data'],
-            'timestamp_received': row['timestamp_received'].isoformat() if row['timestamp_received'] else None
+            'timestamp_received': row['timestamp_received'].isoformat() if row['timestamp_received'] else None,
+            'modifier_user_id': row['modifier_user_id'],
+            'modifier_user_name': row['modifier_user_name'],
+            'previous_stage': row['previous_stage'],
+            'current_stage': row['current_stage'],
+            'changes_summary': row['changes_summary']
         })
     
     return {

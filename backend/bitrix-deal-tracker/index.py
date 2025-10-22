@@ -131,16 +131,61 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             print(f"[ERROR] Ошибка при запросе к REST API: {e}")
             deal_full_data = {'error': str(e), 'deal_id': deal_id}
     
-    # Сохраняем в БД
+    # Получаем данные пользователя через REST API
+    modifier_id = deal_full_data.get('MODIFY_BY_ID', '')
+    modifier_name = ''
+    
+    if modifier_id and webhook_url:
+        try:
+            user_url = f"{webhook_url}user.get.json"
+            user_params = urllib.parse.urlencode({'ID': modifier_id})
+            user_req = urllib.request.Request(f"{user_url}?{user_params}")
+            
+            with urllib.request.urlopen(user_req, timeout=5) as user_response:
+                user_data = json.loads(user_response.read().decode('utf-8'))
+                
+            if user_data.get('result') and len(user_data['result']) > 0:
+                user = user_data['result'][0]
+                modifier_name = f"{user.get('NAME', '')} {user.get('LAST_NAME', '')}".strip()
+                print(f"[INFO] Пользователь: {modifier_name}")
+        except Exception as e:
+            print(f"[WARN] Не удалось получить имя пользователя: {e}")
+    
+    # Находим предыдущее состояние для отслеживания изменений
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    previous_stage = None
+    try:
+        cur.execute("""
+            SELECT deal_data->>'STAGE_ID' as stage_id 
+            FROM deal_changes 
+            WHERE deal_id = %s 
+            ORDER BY timestamp_received DESC 
+            LIMIT 1
+        """, (deal_id,))
+        
+        prev_row = cur.fetchone()
+        if prev_row:
+            previous_stage = prev_row['stage_id']
+    except Exception as e:
+        print(f"[WARN] Не удалось получить предыдущее состояние: {e}")
+    
+    current_stage = deal_full_data.get('STAGE_ID', '')
+    
+    # Формируем summary изменений
+    changes_summary = {}
+    if previous_stage and previous_stage != current_stage:
+        changes_summary['stage'] = {'from': previous_stage, 'to': current_stage}
     
     try:
         cur.execute("""
             INSERT INTO deal_changes (
                 deal_id, event_type, deal_data, event_handler_id,
-                bitrix_domain, member_id, timestamp_bitrix
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                bitrix_domain, member_id, timestamp_bitrix,
+                modifier_user_id, modifier_user_name, 
+                previous_stage, current_stage, changes_summary
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             deal_id,
@@ -149,7 +194,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             event_handler_id,
             domain,
             member_id,
-            int(ts) if ts else None
+            int(ts) if ts else None,
+            modifier_id,
+            modifier_name,
+            previous_stage,
+            current_stage,
+            json.dumps(changes_summary, ensure_ascii=False) if changes_summary else None
         ))
         
         result = cur.fetchone()
