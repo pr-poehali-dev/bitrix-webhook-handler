@@ -31,6 +31,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     headers = event.get('headers', {})
     body_str = event.get('body', '')
     
+    # Логируем RAW данные для дебага
+    print(f"[DEBUG] Method: {method}")
+    print(f"[DEBUG] Headers: {json.dumps(headers, ensure_ascii=False)[:300]}")
+    print(f"[DEBUG] Body (raw): {body_str[:500]}")
+    print(f"[DEBUG] Query params: {event.get('queryStringParameters', {})}")
+    
     # Парсим данные от Битрикс24
     body_data = {}
     if body_str:
