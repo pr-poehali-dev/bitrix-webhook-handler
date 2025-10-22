@@ -300,19 +300,24 @@ def get_bp_detail(bp_id: str) -> Dict[str, Any]:
     
     webhook_url = webhook_url.rstrip('/')
     
-    # Получаем детальную информацию о БП
-    detail_response = requests.get(
-        f'{webhook_url}/bizproc.workflow.instance.get',
-        params={'ID': bp_id},
+    # Получаем детальную информацию о БП через bizproc.workflow.instances с фильтром
+    detail_response = requests.post(
+        f'{webhook_url}/bizproc.workflow.instances',
+        json={
+            'select': ['ID', 'TEMPLATE_ID', 'TEMPLATE_NAME', 'DOCUMENT_ID', 'STARTED', 'STARTED_BY', 'MODIFIED', 'WORKFLOW_STATUS', 'WORKFLOW_STATE'],
+            'filter': {'ID': bp_id}
+        },
         timeout=30
     )
     detail_response.raise_for_status()
     detail_data = detail_response.json()
     
-    if 'error' in detail_data:
-        raise ValueError(f"Ошибка API: {detail_data.get('error_description', 'Неизвестная ошибка')}")
-    
-    bp_info = detail_data.get('result', {})
+    # Извлекаем первый результат (должен быть единственный)
+    if 'result' in detail_data and detail_data['result']:
+        bp_info = detail_data['result'][0]
+    else:
+        bp_info = {}
+
     
     # Получаем задачи БП
     tasks = []
