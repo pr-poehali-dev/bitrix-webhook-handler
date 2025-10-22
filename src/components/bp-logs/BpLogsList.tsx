@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Icon from '@/components/ui/icon';
 import { BpLog } from './types';
-import { getStatusBadge, formatDate } from './utils';
+import { getStatusBadge, formatDate } from './utils.tsx';
 
 interface BpLogsListProps {
   logs: BpLog[];

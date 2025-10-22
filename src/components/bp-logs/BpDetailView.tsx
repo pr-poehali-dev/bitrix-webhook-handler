@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { BpDetail } from './types';
-import { getStatusBadge, formatDate } from './utils';
+import { getStatusBadge, formatDate } from './utils.tsx';
 
 interface BpDetailViewProps {
   bpDetail: BpDetail | null;
