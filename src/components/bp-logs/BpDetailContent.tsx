@@ -68,6 +68,104 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
           </div>
         </div>
 
+        {bpDetail.stats && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-lg flex items-center gap-2">
+              <Icon name="BarChart3" size={18} />
+              Статистика запусков
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-primary">{bpDetail.stats.total_runs}</div>
+                    <div className="text-sm text-slate-600 mt-1">Всего запусков</div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-primary">{bpDetail.stats.runs_by_user.length}</div>
+                    <div className="text-sm text-slate-600 mt-1">Уникальных пользователей</div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-primary">
+                      {bpDetail.stats.recent_runs.length > 0 
+                        ? formatDate(bpDetail.stats.recent_runs[0].started).split(' ')[0]
+                        : 'Нет данных'}
+                    </div>
+                    <div className="text-sm text-slate-600 mt-1">Последний запуск</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {bpDetail.stats.runs_by_user.length > 0 && (
+              <div className="space-y-3">
+                <h5 className="font-semibold flex items-center gap-2">
+                  <Icon name="Users" size={16} />
+                  Статистика по пользователям
+                </h5>
+                <div className="space-y-2">
+                  {bpDetail.stats.runs_by_user.map((user, idx) => (
+                    <Card key={idx} className="bg-white">
+                      <CardContent className="pt-3 pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Icon name="User" size={16} className="text-primary" />
+                            </div>
+                            <div>
+                              <div className="font-medium">Пользователь ID: {user.user_id}</div>
+                              <div className="text-xs text-slate-500">
+                                Последний запуск: {formatDate(user.last_run)}
+                              </div>
+                            </div>
+                          </div>
+                          <Badge variant="secondary">{user.count} запусков</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {bpDetail.stats.recent_runs.length > 0 && (
+              <div className="space-y-3">
+                <h5 className="font-semibold flex items-center gap-2">
+                  <Icon name="Clock" size={16} />
+                  Последние запуски
+                </h5>
+                <div className="space-y-2">
+                  {bpDetail.stats.recent_runs.map((run, idx) => (
+                    <Card key={idx} className="bg-white">
+                      <CardContent className="pt-3 pb-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">ID: {run.id}</div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              Запустил: Пользователь {run.started_by} • {formatDate(run.started)}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {bpDetail.tasks && bpDetail.tasks.length > 0 && (
           <div className="space-y-3">
             <h4 className="font-semibold text-lg flex items-center gap-2">

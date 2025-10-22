@@ -45,7 +45,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             }
         
         try:
-            detail = get_bp_detail(bp_id)
+            if bp_id.startswith('template_'):
+                template_id = bp_id.replace('template_', '')
+                detail = get_template_stats(template_id)
+            else:
+                detail = get_bp_detail(bp_id)
+            
             return {
                 'statusCode': 200,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
@@ -337,6 +342,91 @@ def get_bp_detail(bp_id: str) -> Dict[str, Any]:
             for task in tasks
         ],
         'history': history
+    }
+
+def get_template_stats(template_id: str) -> Dict[str, Any]:
+    webhook_url = os.environ.get('BITRIX24_WEBHOOK_URL')
+    if not webhook_url:
+        raise ValueError('BITRIX24_WEBHOOK_URL не настроен')
+    
+    webhook_url = webhook_url.rstrip('/')
+    
+    template_response = requests.post(
+        f'{webhook_url}/bizproc.workflow.template.list',
+        json={},
+        timeout=30
+    )
+    template_response.raise_for_status()
+    template_data = template_response.json()
+    templates = template_data.get('result', {})
+    
+    template_info = templates.get(template_id, {})
+    
+    instances_response = requests.post(
+        f'{webhook_url}/bizproc.workflow.instance.list',
+        json={
+            'SELECT': ['ID', 'TEMPLATE_ID', 'DOCUMENT_ID', 'MODIFIED', 'STARTED', 'STARTED_BY', 'WORKFLOW_STATUS'],
+            'FILTER': {'TEMPLATE_ID': template_id}
+        },
+        timeout=30
+    )
+    
+    instances = []
+    if instances_response.status_code == 200:
+        instances_data = instances_response.json()
+        instances = instances_data.get('result', [])
+    
+    runs_by_user = {}
+    runs_by_date = {}
+    total_runs = len(instances)
+    
+    for instance in instances:
+        user_id = str(instance.get('STARTED_BY', 'unknown'))
+        started = instance.get('STARTED', '')
+        
+        if user_id not in runs_by_user:
+            runs_by_user[user_id] = {'count': 0, 'last_run': ''}
+        runs_by_user[user_id]['count'] += 1
+        if started > runs_by_user[user_id]['last_run']:
+            runs_by_user[user_id]['last_run'] = started
+        
+        if started:
+            date_key = started.split('T')[0] if 'T' in started else started[:10]
+            runs_by_date[date_key] = runs_by_date.get(date_key, 0) + 1
+    
+    recent_runs = sorted(instances, key=lambda x: x.get('STARTED', ''), reverse=True)[:10]
+    
+    return {
+        'id': f'template_{template_id}',
+        'template_id': template_id,
+        'template_name': template_info.get('NAME', 'Неизвестно'),
+        'document_id': template_info.get('DOCUMENT_TYPE', 'Не указан'),
+        'started': template_info.get('CREATED', ''),
+        'started_by': str(template_info.get('USER_ID', '')),
+        'modified': template_info.get('MODIFIED', ''),
+        'workflow_status': {},
+        'tasks': [],
+        'history': [],
+        'stats': {
+            'total_runs': total_runs,
+            'runs_by_user': [
+                {'user_id': user_id, 'count': data['count'], 'last_run': data['last_run']}
+                for user_id, data in sorted(runs_by_user.items(), key=lambda x: x[1]['count'], reverse=True)
+            ],
+            'runs_by_date': [
+                {'date': date, 'count': count}
+                for date, count in sorted(runs_by_date.items(), reverse=True)[:30]
+            ],
+            'recent_runs': [
+                {
+                    'id': run.get('ID', ''),
+                    'started': run.get('STARTED', ''),
+                    'started_by': str(run.get('STARTED_BY', '')),
+                    'document_id': run.get('DOCUMENT_ID', '')
+                }
+                for run in recent_runs
+            ]
+        }
     }
 
 def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:

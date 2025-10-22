@@ -88,21 +88,28 @@ const BpLogs = () => {
     }
 
     if (bpId.startsWith('template_')) {
-      const log = logs.find(l => l.id === bpId);
-      if (log) {
-        setSelectedBp(bpId);
-        setBpDetail({
-          id: bpId,
-          template_id: bpId.replace('template_', ''),
-          template_name: log.name,
-          started: log.started,
-          modified: log.last_activity || log.started,
-          started_by: log.user_id,
-          document_id: log.document_id || 'Не указан',
-          workflow_status: { info: 'Это шаблон бизнес-процесса. Детали доступны только для запущенных экземпляров.' },
-          tasks: [],
-          history: []
+      setSelectedBp(bpId);
+      setDetailLoading(true);
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/detail?id=${bpId}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Ошибка загрузки статистики шаблона');
+        }
+
+        setBpDetail(data);
+      } catch (err: any) {
+        toast({
+          title: 'Ошибка',
+          description: err.message,
+          variant: 'destructive',
         });
+        setSelectedBp(null);
+        setBpDetail(null);
+      } finally {
+        setDetailLoading(false);
       }
       return;
     }

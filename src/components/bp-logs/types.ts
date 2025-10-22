@@ -16,7 +16,7 @@ export interface BpDetail {
   document_id: string | string[];
   started: string;
   started_by: string;
-  status: string;
+  status?: string;
   modified: string;
   workflow_status: Record<string, any>;
   tasks: Array<{
@@ -37,4 +37,22 @@ export interface BpDetail {
     action: string;
     action_name: string;
   }>;
+  stats?: {
+    total_runs: number;
+    runs_by_user: Array<{
+      user_id: string;
+      count: number;
+      last_run: string;
+    }>;
+    runs_by_date: Array<{
+      date: string;
+      count: number;
+    }>;
+    recent_runs: Array<{
+      id: string;
+      started: string;
+      started_by: string;
+      document_id: string;
+    }>;
+  };
 }
