@@ -53,7 +53,7 @@ try {
             wi.STATUS as status_code,
             wi.WORKFLOW_TEMPLATE_ID as template_id,
             GROUP_CONCAT(
-                CONCAT(t.MODIFIED, '|', t.TYPE, '|', t.ACTION_NAME, '|', COALESCE(t.NOTE, ''))
+                CONCAT(t.MODIFIED, '|', t.TYPE, '|', t.ACTION_NAME)
                 ORDER BY t.MODIFIED DESC
                 SEPARATOR ';;;'
             ) as tracking_logs
@@ -116,19 +116,18 @@ try {
             $logEntries = explode(';;;', $row['tracking_logs']);
             foreach ($logEntries as $logEntry) {
                 $parts = explode('|', $logEntry);
-                if (count($parts) >= 4) {
-                    list($logTime, $logType, $actionName, $actionNote) = $parts;
+                if (count($parts) >= 3) {
+                    list($logTime, $logType, $actionName) = $parts;
                     
                     $tracking[] = [
                         'time' => $logTime,
                         'type' => $logType,
-                        'action' => $actionName,
-                        'note' => $actionNote
+                        'action' => $actionName
                     ];
                     
                     // Тип 6 = ошибка в b_bp_tracking
-                    if ($logType == '6' && !empty($actionNote)) {
-                        $errors[] = $actionName . ': ' . $actionNote;
+                    if ($logType == '6') {
+                        $errors[] = $actionName;
                     }
                 }
             }
