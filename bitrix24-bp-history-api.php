@@ -89,8 +89,22 @@ try {
     $params[] = $limit;
     $params[] = $offset;
     
+    // Заменяем placeholders на реальные значения (Битрикс использует свой метод)
+    // Используем sqlHelper для безопасной подстановки
+    $sqlHelper = $connection->getSqlHelper();
+    
+    // Подставляем параметры вручную (безопасно через sqlHelper)
+    foreach ($params as $param) {
+        if (is_int($param)) {
+            $sql = preg_replace('/\?/', $param, $sql, 1);
+        } else {
+            $escapedParam = $sqlHelper->forSql($param);
+            $sql = preg_replace('/\?/', "'{$escapedParam}'", $sql, 1);
+        }
+    }
+    
     // Выполняем запрос
-    $result = $connection->query($sql, $params);
+    $result = $connection->query($sql);
     
     $logs = [];
     while ($row = $result->fetch()) {
