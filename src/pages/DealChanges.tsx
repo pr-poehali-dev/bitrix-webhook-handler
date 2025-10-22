@@ -28,6 +28,7 @@ interface DealChange {
 }
 
 const BACKEND_URL = 'https://functions.poehali.dev/fa7ea1c4-cbac-4964-b75e-c5b527e353c7';
+const ENRICH_URL = 'https://functions.poehali.dev/b597a185-9519-4098-92d3-670edaa7daac';
 
 const STAGE_NAMES: Record<string, string> = {
   'NEW': 'Новая',
@@ -42,6 +43,7 @@ const STAGE_NAMES: Record<string, string> = {
 export default function DealChanges() {
   const [changes, setChanges] = useState<DealChange[]>([]);
   const [loading, setLoading] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const { toast } = useToast();
@@ -73,6 +75,37 @@ export default function DealChanges() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const enrichUserData = async () => {
+    setEnriching(true);
+    try {
+      const response = await fetch(ENRICH_URL, {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Ошибка обогащения данных');
+      }
+
+      const data = await response.json();
+      
+      toast({
+        title: 'Успешно!',
+        description: `${data.message}. Обработано пользователей: ${data.users_processed}`,
+      });
+      
+      // Обновляем список после обогащения
+      fetchChanges();
+    } catch (err: any) {
+      toast({
+        title: 'Ошибка',
+        description: err.message || 'Не удалось обогатить данные',
+        variant: 'destructive',
+      });
+    } finally {
+      setEnriching(false);
     }
   };
 
@@ -177,6 +210,15 @@ export default function DealChanges() {
             <div className="flex items-center justify-between">
               <CardTitle>Фильтры и настройки</CardTitle>
               <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={enrichUserData}
+                  disabled={enriching}
+                >
+                  <Icon name={enriching ? 'Loader2' : 'UserPlus'} size={16} className={`mr-2 ${enriching ? 'animate-spin' : ''}`} />
+                  {enriching ? 'Загрузка...' : 'Загрузить имена'}
+                </Button>
                 <Button
                   variant={autoRefresh ? 'default' : 'outline'}
                   size="sm"

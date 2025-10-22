@@ -1,4 +1,5 @@
 {
+  "deal-changes-enrich": "https://functions.poehali.dev/b597a185-9519-4098-92d3-670edaa7daac",
   "deal-changes-api": "https://functions.poehali.dev/fa7ea1c4-cbac-4964-b75e-c5b527e353c7",
   "bitrix-deal-tracker": "https://functions.poehali.dev/d26ee36d-e7d1-4b83-b45e-d1337f53bb19",
   "bitrix-test-handler": "https://functions.poehali.dev/7c260289-9d54-49dd-b0c9-8240b2e6f506",
