@@ -1,0 +1,45 @@
+{
+  "tests": [
+    {
+      "name": "Get deal changes with default limit",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "changes": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get deal changes with custom limit",
+      "method": "GET",
+      "path": "/?limit=10",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "changes": "array",
+        "count": "number"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Search deal changes",
+      "method": "GET",
+      "path": "/?search=209",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "changes": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "OPTIONS request for CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": ""
+    }
+  ]
+}

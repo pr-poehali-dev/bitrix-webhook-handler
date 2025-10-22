@@ -63,6 +63,14 @@ export default function Index() {
       path: '/bp-logs',
       color: 'bg-red-500',
     },
+    {
+      id: 'deal-changes',
+      title: 'История сделок',
+      description: 'Отслеживание изменений в сделках Битрикс24',
+      icon: 'History',
+      path: '/deal-changes',
+      color: 'bg-indigo-500',
+    },
   ];
 
   useEffect(() => {
