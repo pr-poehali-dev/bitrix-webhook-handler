@@ -37,9 +37,38 @@ try {
     $offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
     $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
     $search = isset($_GET['search']) ? $_GET['search'] : '';
+    $debug = isset($_GET['debug']) ? true : false;
     
     // Получаем подключение к БД
     $connection = Application::getConnection();
+    
+    // Режим отладки - показываем все доступные таблицы и их количество записей
+    if ($debug) {
+        $tables = [
+            'b_bp_workflow_instance' => 'SELECT COUNT(*) as cnt FROM b_bp_workflow_instance',
+            'b_bp_workflow_template' => 'SELECT COUNT(*) as cnt FROM b_bp_workflow_template',
+            'b_bp_tracking' => 'SELECT COUNT(*) as cnt FROM b_bp_tracking',
+            'b_bp_task' => 'SELECT COUNT(*) as cnt FROM b_bp_task'
+        ];
+        
+        $debugInfo = [];
+        foreach ($tables as $tableName => $query) {
+            try {
+                $result = $connection->query($query);
+                $row = $result->fetch();
+                $debugInfo[$tableName] = intval($row['cnt']);
+            } catch (Exception $e) {
+                $debugInfo[$tableName] = 'Error: ' . $e->getMessage();
+            }
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'debug' => true,
+            'table_counts' => $debugInfo
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        exit;
+    }
     
     // Формируем SQL-запрос
     $sql = "
