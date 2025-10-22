@@ -45,9 +45,9 @@ const BpLogs = () => {
     setError(null);
     
     try {
-      // Для "Все БП" ВСЕГДА используем БД (source=db), чтобы получить историю
+      // Используем REST API Битрикс24 (БД недоступна извне на коробочной версии)
       const params = new URLSearchParams({
-        source: 'db',
+        source: 'api',
         limit: '100',
         offset: '0',
         showAll: 'true'
