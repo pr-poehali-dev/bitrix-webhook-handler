@@ -75,10 +75,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     status_filter = params.get('status')
     search_query = params.get('search')
     show_all = params.get('showAll', 'false').lower() == 'true'
+    debug = params.get('debug', '0') == '1'
     
     try:
         if source == 'db':
-            logs = get_logs_from_db(limit, offset, status_filter, search_query)
+            logs = get_logs_from_db(limit, offset, status_filter, search_query, debug)
         else:
             logs = get_logs_from_api(limit, offset, status_filter, search_query, show_all)
         
@@ -502,7 +503,7 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     print(f"[DEBUG] Возвращаем данные шаблона: id={result['id']}, total_runs={result['stats']['total_runs']}")
     return result
 
-def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:
+def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str], debug: bool = False) -> List[Dict[str, Any]]:
     """Получение истории БП через PHP API на сервере Битрикс24"""
     
     # URL PHP-скрипта на сервере Битрикс24
@@ -525,6 +526,9 @@ def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], sear
         'limit': str(limit),
         'offset': str(offset)
     }
+    
+    if debug:
+        params['debug'] = '1'
     
     if status_filter:
         params['status'] = status_filter
