@@ -45,9 +45,9 @@ const BpLogs = () => {
     setError(null);
     
     try {
-      // Используем REST API Битрикс24 (БД недоступна извне на коробочной версии)
+      // Используем PHP API на сервере Битрикс24 для получения истории из БД
       const params = new URLSearchParams({
-        source: 'api',
+        source: 'db',
         limit: '100',
         offset: '0',
         showAll: 'true'

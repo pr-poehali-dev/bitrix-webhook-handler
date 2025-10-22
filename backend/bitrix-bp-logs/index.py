@@ -503,126 +503,49 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     return result
 
 def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:
-    """Получение истории БП из БД Битрикс24 (MySQL)"""
-    import pymysql
-    from pymysql.cursors import DictCursor
+    """Получение истории БП через PHP API на сервере Битрикс24"""
     
-    # Очищаем хост от протокола и слешей
-    db_host = os.environ.get('BITRIX24_DB_HOST', '')
-    db_host = db_host.replace('https://', '').replace('http://', '').rstrip('/')
+    # URL PHP-скрипта на сервере Битрикс24
+    php_api_url = os.environ.get('BITRIX24_BP_HISTORY_API_URL')
     
-    db_config = {
-        'host': db_host,
-        'database': os.environ.get('BITRIX24_DB_NAME'),
-        'user': os.environ.get('BITRIX24_DB_USER'),
-        'password': os.environ.get('BITRIX24_DB_PASSWORD'),
-        'port': int(os.environ.get('BITRIX24_DB_PORT', '3306')),
-        'charset': 'utf8mb4',
-        'cursorclass': DictCursor
+    if not php_api_url:
+        # Пытаемся построить URL из webhook
+        webhook_url = os.environ.get('BITRIX24_BP_WEBHOOK_URL') or os.environ.get('BITRIX24_WEBHOOK_URL')
+        if webhook_url:
+            # Извлекаем базовый домен из webhook (например: https://itpood.ru)
+            base_url = webhook_url.split('/rest/')[0] if '/rest/' in webhook_url else webhook_url.rstrip('/')
+            php_api_url = f"{base_url}/local/api/bp-history.php"
+        else:
+            raise ValueError('BITRIX24_BP_HISTORY_API_URL не настроен')
+    
+    print(f"[DEBUG DB] Запрос к PHP API: {php_api_url}")
+    
+    # Формируем параметры запроса
+    params = {
+        'limit': str(limit),
+        'offset': str(offset)
     }
     
-    for key in ['host', 'database', 'user', 'password']:
-        if not db_config.get(key):
-            raise ValueError(f'BITRIX24_DB_{key.upper()} не настроен в секретах')
+    if status_filter:
+        params['status'] = status_filter
     
-    print(f"[DEBUG DB] Подключение к БД: {db_config['host']}:{db_config['port']}/{db_config['database']}")
+    if search:
+        params['search'] = search
     
-    conn = pymysql.connect(**db_config)
+    # Выполняем HTTP-запрос к PHP API
+    response = requests.get(php_api_url, params=params, timeout=30)
     
-    try:
-        with conn.cursor() as cursor:
-            # Запрос к таблицам b_bp_workflow_instance (экземпляры БП) и b_bp_tracking (логи)
-            query = '''
-                SELECT 
-                    wi.ID as id,
-                    wt.NAME as name,
-                    wi.STARTED as started,
-                    wi.STARTED_BY as user_id,
-                    wi.DOCUMENT_ID as document_id,
-                    wi.MODIFIED as modified,
-                    wi.STATUS as status_code,
-                    GROUP_CONCAT(
-                        CONCAT(t.MODIFIED, '|', t.TYPE, '|', t.ACTION_NAME, '|', COALESCE(t.NOTE, ''))
-                        ORDER BY t.MODIFIED DESC
-                        SEPARATOR ';;;'
-                    ) as tracking_logs
-                FROM b_bp_workflow_instance wi
-                LEFT JOIN b_bp_workflow_template wt ON wi.WORKFLOW_TEMPLATE_ID = wt.ID
-                LEFT JOIN b_bp_tracking t ON wi.ID = t.WORKFLOW_ID
-            '''
-            
-            conditions = []
-            params = []
-            
-            if search:
-                conditions.append("(wt.NAME LIKE %s OR wi.ID LIKE %s)")
-                search_pattern = f'%{search}%'
-                params.extend([search_pattern, search_pattern])
-            
-            if status_filter:
-                # Статусы БП в Битрикс24: 1=running, 2=paused, 3=terminated, 4=completed
-                if status_filter == 'running':
-                    conditions.append("wi.STATUS IN (1, 2)")
-                elif status_filter == 'completed':
-                    conditions.append("wi.STATUS = 4")
-                elif status_filter == 'error':
-                    conditions.append("wi.STATUS = 3")
-            
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-            
-            query += " GROUP BY wi.ID ORDER BY wi.STARTED DESC LIMIT %s OFFSET %s"
-            params.extend([limit, offset])
-            
-            print(f"[DEBUG DB] Выполняем запрос к БД с параметрами: limit={limit}, offset={offset}")
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            
-            print(f"[DEBUG DB] Получено строк из БД: {len(rows)}")
-            
-            logs = []
-            for row in rows:
-                # Парсим логи трекинга
-                errors = []
-                tracking_logs = []
-                if row['tracking_logs']:
-                    for log_entry in row['tracking_logs'].split(';;;'):
-                        parts = log_entry.split('|')
-                        if len(parts) >= 4:
-                            log_time, log_type, action_name, action_note = parts
-                            tracking_logs.append({
-                                'time': log_time,
-                                'type': log_type,
-                                'action': action_name,
-                                'note': action_note
-                            })
-                            # Тип 6 = ошибка в b_bp_tracking
-                            if log_type == '6' and action_note:
-                                errors.append(f"{action_name}: {action_note}")
-                
-                # Определяем статус: 1=running, 2=paused, 3=terminated (error), 4=completed
-                status_code = row['status_code']
-                if errors or status_code == 3:
-                    status = 'error'
-                elif status_code in [1, 2]:
-                    status = 'running'
-                elif status_code == 4:
-                    status = 'completed'
-                else:
-                    status = 'unknown'
-                
-                logs.append({
-                    'id': str(row['id']),
-                    'name': row['name'] or 'Без названия',
-                    'status': status,
-                    'started': row['started'].isoformat() if row['started'] else '',
-                    'user_id': str(row['user_id'] or ''),
-                    'document_id': row['document_id'] or '',
-                    'errors': errors,
-                    'last_activity': row['modified'].isoformat() if row['modified'] else '',
-                    'tracking': tracking_logs[:10]  # Последние 10 записей трекинга
-                })
-            
-            return logs
-    finally:
-        conn.close()
+    print(f"[DEBUG DB] Статус ответа PHP API: {response.status_code}")
+    
+    if response.status_code != 200:
+        raise ValueError(f"PHP API вернул ошибку: {response.status_code}, текст: {response.text[:500]}")
+    
+    data = response.json()
+    
+    if not data.get('success', False):
+        raise ValueError(f"PHP API вернул ошибку: {data.get('error', 'Неизвестная ошибка')}")
+    
+    logs = data.get('logs', [])
+    print(f"[DEBUG DB] Получено логов из PHP API: {len(logs)}")
+    
+    return logs
