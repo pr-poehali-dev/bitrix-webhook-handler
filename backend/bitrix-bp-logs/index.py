@@ -294,9 +294,9 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     return logs[offset:offset + limit]
 
 def get_bp_detail(bp_id: str) -> Dict[str, Any]:
-    webhook_url = os.environ.get('BITRIX24_WEBHOOK_URL')
+    webhook_url = os.environ.get('BITRIX24_BP_WEBHOOK_URL') or os.environ.get('BITRIX24_WEBHOOK_URL')
     if not webhook_url:
-        raise ValueError('BITRIX24_WEBHOOK_URL не настроен')
+        raise ValueError('BITRIX24_BP_WEBHOOK_URL не настроен')
     
     webhook_url = webhook_url.rstrip('/')
     
@@ -383,7 +383,7 @@ def get_bp_detail(bp_id: str) -> Dict[str, Any]:
     }
 
 def get_template_stats(template_id: str) -> Dict[str, Any]:
-    webhook_url = os.environ.get('BITRIX24_BP_WEBHOOK_URL')
+    webhook_url = os.environ.get('BITRIX24_BP_WEBHOOK_URL') or os.environ.get('BITRIX24_WEBHOOK_URL')
     if not webhook_url:
         raise ValueError('BITRIX24_BP_WEBHOOK_URL не настроен')
     
