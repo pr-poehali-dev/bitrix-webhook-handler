@@ -54,7 +54,7 @@ const BpLogsList = ({
                     log.status === 'completed' ? '#22c55e' :
                     '#94a3b8'
                 }}
-                onClick={() => !log.id.startsWith('template_') && onViewDetails(log.id)}
+                onClick={() => onViewDetails(log.id)}
               >
                 <CardContent className="pt-4">
                   <div className="flex items-start justify-between gap-4">
@@ -79,15 +79,13 @@ const BpLogsList = ({
                         </div>
                       </div>
                       
-                      {!log.id.startsWith('template_') && (
-                        <div className="flex items-center gap-2 text-sm text-primary">
-                          <Icon 
-                            name={selectedBp === log.id ? "ChevronUp" : "ChevronDown"} 
-                            size={16} 
-                          />
-                          <span>{selectedBp === log.id ? 'Свернуть детали' : 'Развернуть детали'}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-sm text-primary">
+                        <Icon 
+                          name={selectedBp === log.id ? "ChevronUp" : "ChevronDown"} 
+                          size={16} 
+                        />
+                        <span>{selectedBp === log.id ? 'Свернуть детали' : 'Развернуть детали'}</span>
+                      </div>
 
                       {log.errors && log.errors.length > 0 && (
                         <Alert variant="destructive" className="mt-3">
