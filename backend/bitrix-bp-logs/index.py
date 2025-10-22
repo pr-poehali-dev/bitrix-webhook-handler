@@ -141,13 +141,13 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     
     logs = []
     
-    # Получаем список активных экземпляров БП через bizproc.workflow.instances (правильное название метода!)
+    # Получаем список ВСЕХ экземпляров БП (активные + завершённые) через bizproc.workflow.instances
     instances_response = requests.post(
         f'{webhook_url}/bizproc.workflow.instances',
         json={
-            'select': ['ID', 'MODIFIED', 'OWNED_UNTIL', 'MODULE_ID', 'ENTITY', 'DOCUMENT_ID', 'STARTED', 'STARTED_BY', 'TEMPLATE_ID'],
+            'select': ['ID', 'MODIFIED', 'OWNED_UNTIL', 'MODULE_ID', 'ENTITY', 'DOCUMENT_ID', 'STARTED', 'STARTED_BY', 'TEMPLATE_ID', 'WORKFLOW_STATUS'],
             'order': {'STARTED': 'DESC'},
-            'filter': {'>STARTED_BY': 0}
+            'filter': {'>STARTED_BY': 0}  # Без фильтра по статусу - получаем все (активные и завершённые)
         },
         timeout=30
     )
@@ -213,30 +213,51 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
         try:
             template_name = templates.get(instance.get('TEMPLATE_ID'), {}).get('NAME', 'Без названия')
             
-            # Пытаемся получить детальные логи
+            # Получаем детальные логи и ошибки
             errors = []
+            workflow_state_data = {}
             try:
-                log_response = requests.get(
-                    f'{webhook_url}/bizproc.workflow.instance.get',
-                    params={'ID': instance['ID']},
+                log_response = requests.post(
+                    f'{webhook_url}/bizproc.workflow.instances',
+                    json={
+                        'select': ['ID', 'WORKFLOW_STATE'],
+                        'filter': {'ID': instance['ID']}
+                    },
                     timeout=5
                 )
                 if log_response.status_code == 200:
                     detail_data = log_response.json()
-                    if 'error' in detail_data:
-                        errors.append(detail_data.get('error_description', 'Неизвестная ошибка'))
-            except:
-                pass
+                    if 'result' in detail_data and detail_data['result']:
+                        workflow_state = detail_data['result'][0].get('WORKFLOW_STATE', {})
+                        workflow_state_data = workflow_state
+                        
+                        # Проверяем наличие ошибок в состоянии БП
+                        if isinstance(workflow_state, dict):
+                            for activity_id, activity_data in workflow_state.items():
+                                if isinstance(activity_data, dict):
+                                    if activity_data.get('Type') == 'ExecuteError':
+                                        error_msg = activity_data.get('Title', 'Ошибка выполнения активности')
+                                        errors.append(f"Активность {activity_id}: {error_msg}")
+                                    if 'Error' in activity_data:
+                                        errors.append(f"Активность {activity_id}: {activity_data['Error']}")
+            except Exception as e:
+                print(f"[DEBUG] Ошибка получения деталей БП {instance['ID']}: {e}")
             
-            # Определяем статус
-            workflow_status = instance.get('STATUS', 0)
-            if errors or workflow_status == 3:
+            # Определяем статус из WORKFLOW_STATUS
+            workflow_status_code = instance.get('WORKFLOW_STATUS', {})
+            if isinstance(workflow_status_code, dict):
+                status_val = workflow_status_code.get('value', 0)
+            else:
+                status_val = workflow_status_code
+            
+            # Статусы: 0=running, 1=completed, 2=terminated, 3=error
+            if errors or status_val == 3:
                 status = 'error'
-            elif workflow_status in [0, 1]:
+            elif status_val in [0]:
                 status = 'running'
-            elif workflow_status == 2:
+            elif status_val == 1:
                 status = 'completed'
-            elif workflow_status == 4:
+            elif status_val == 2:
                 status = 'terminated'
             else:
                 status = 'unknown'
