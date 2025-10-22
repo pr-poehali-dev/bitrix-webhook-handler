@@ -78,6 +78,18 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
               Статистика запусков
             </h4>
             
+            {bpDetail.stats.total_runs === 0 ? (
+              <Card className="bg-white border-dashed">
+                <CardContent className="py-8">
+                  <div className="text-center text-slate-500 space-y-2">
+                    <Icon name="Info" size={32} className="mx-auto text-slate-400" />
+                    <div className="font-medium">Этот бизнес-процесс ещё не запускался</div>
+                    <div className="text-sm">Статистика появится после первого запуска</div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="bg-white">
                 <CardContent className="pt-4">
@@ -165,6 +177,8 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
                   ))}
                 </div>
               </div>
+            )}
+            </>
             )}
           </div>
         )}
