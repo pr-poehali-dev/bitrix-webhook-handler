@@ -45,14 +45,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 print(f"[DEBUG] Это шаблон, загружаем статистику")
                 template_id = bp_id.replace('template_', '')
                 detail = get_template_stats(template_id)
+                print(f"[DEBUG] Получены данные шаблона, ключи: {list(detail.keys())}")
             else:
                 print(f"[DEBUG] Это экземпляр БП, загружаем детали")
                 detail = get_bp_detail(bp_id)
             
+            body_str = json.dumps(detail, ensure_ascii=False)
+            print(f"[DEBUG] Отправляем ответ, длина body: {len(body_str)} символов")
+            
             return {
                 'statusCode': 200,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps(detail, ensure_ascii=False)
+                'body': body_str
             }
         except Exception as e:
             print(f"[ERROR] Ошибка получения деталей: {e}")
