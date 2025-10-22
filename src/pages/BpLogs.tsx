@@ -94,6 +94,8 @@ const BpLogs = () => {
       try {
         const response = await fetch(`${BACKEND_URL}?id=${bpId}`);
         const data = await response.json();
+        
+        console.log('[DEBUG] Template stats response:', data);
 
         if (!response.ok) {
           throw new Error(data.message || 'Ошибка загрузки статистики шаблона');
