@@ -181,6 +181,7 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     # Если нет экземпляров, показываем шаблоны
     if not instances:
         print(f"[DEBUG] Экземпляров нет, возвращаем шаблоны")
+        print(f"[DEBUG] Ключи templates: {list(templates.keys())}")
         for template_id, template in list(templates.items())[:limit]:
             if search and search.lower() not in template.get('NAME', '').lower():
                 continue
