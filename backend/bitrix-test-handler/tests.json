@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS запрос для CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedHeaders": {
+        "Access-Control-Allow-Origin": "*"
+      }
+    },
+    {
+      "name": "GET запрос",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST с данными Битрикс24",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "event": "ONCRMDEALUPDATE",
+        "data": {
+          "FIELDS": {
+            "ID": "123"
+          }
+        },
+        "ts": "1234567890",
+        "auth": {
+          "domain": "example.bitrix24.ru"
+        }
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "bitrix24_event": {
+          "event": "ONCRMDEALUPDATE"
+        }
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
