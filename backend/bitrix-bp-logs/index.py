@@ -507,8 +507,12 @@ def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], sear
     import pymysql
     from pymysql.cursors import DictCursor
     
+    # Очищаем хост от протокола и слешей
+    db_host = os.environ.get('BITRIX24_DB_HOST', '')
+    db_host = db_host.replace('https://', '').replace('http://', '').rstrip('/')
+    
     db_config = {
-        'host': os.environ.get('BITRIX24_DB_HOST'),
+        'host': db_host,
         'database': os.environ.get('BITRIX24_DB_NAME'),
         'user': os.environ.get('BITRIX24_DB_USER'),
         'password': os.environ.get('BITRIX24_DB_PASSWORD'),
@@ -520,6 +524,8 @@ def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], sear
     for key in ['host', 'database', 'user', 'password']:
         if not db_config.get(key):
             raise ValueError(f'BITRIX24_DB_{key.upper()} не настроен в секретах')
+    
+    print(f"[DEBUG DB] Подключение к БД: {db_config['host']}:{db_config['port']}/{db_config['database']}")
     
     conn = pymysql.connect(**db_config)
     
