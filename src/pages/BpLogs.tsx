@@ -87,6 +87,26 @@ const BpLogs = () => {
       return;
     }
 
+    if (bpId.startsWith('template_')) {
+      const log = logs.find(l => l.id === bpId);
+      if (log) {
+        setSelectedBp(bpId);
+        setBpDetail({
+          id: bpId,
+          template_id: bpId.replace('template_', ''),
+          template_name: log.name,
+          started: log.started,
+          modified: log.last_activity || log.started,
+          started_by: log.user_id,
+          document_id: log.document_id || 'Не указан',
+          workflow_status: { info: 'Это шаблон бизнес-процесса. Детали доступны только для запущенных экземпляров.' },
+          tasks: [],
+          history: []
+        });
+      }
+      return;
+    }
+
     setSelectedBp(bpId);
     setDetailLoading(true);
     
