@@ -97,6 +97,7 @@ const BpLogs = () => {
       completed: { variant: 'default', icon: 'CheckCircle2', label: 'Завершён' },
       error: { variant: 'destructive', icon: 'XCircle', label: 'Ошибка' },
       terminated: { variant: 'secondary', icon: 'StopCircle', label: 'Прерван' },
+      template: { variant: 'outline', icon: 'FileCode', label: 'Шаблон' },
       unknown: { variant: 'outline', icon: 'HelpCircle', label: 'Неизвестно' },
     };
 

@@ -104,6 +104,7 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     print(f"[DEBUG] URL запроса: {webhook_url}/bizproc.workflow.instances")
     
     if instances_response.status_code != 200:
+        print(f"[DEBUG] Ошибка запроса instances: {instances_response.status_code}")
         # Если метод не работает, возвращаем информацию о шаблонах
         for template_id, template in list(templates.items())[:limit]:
             if search and search.lower() not in template.get('NAME', '').lower():
@@ -112,7 +113,7 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
             logs.append({
                 'id': template_id,
                 'name': template.get('NAME', 'Без названия'),
-                'status': 'unknown',
+                'status': 'template',
                 'started': template.get('MODIFIED', ''),
                 'user_id': template.get('USER_ID', ''),
                 'document_id': '',
@@ -125,7 +126,26 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     instances = instances_data.get('result', [])
     
     print(f"[DEBUG] Получено экземпляров БП: {len(instances)}")
-    print(f"[DEBUG] Ответ API: {instances_data}")
+    print(f"[DEBUG] Instances: {instances}")
+    
+    # Если нет экземпляров, показываем шаблоны
+    if not instances:
+        print(f"[DEBUG] Экземпляров нет, возвращаем шаблоны")
+        for template_id, template in list(templates.items())[:limit]:
+            if search and search.lower() not in template.get('NAME', '').lower():
+                continue
+            
+            logs.append({
+                'id': f"template_{template_id}",
+                'name': f"[Шаблон] {template.get('NAME', 'Без названия')}",
+                'status': 'template',
+                'started': template.get('MODIFIED', template.get('CREATED', '')),
+                'user_id': str(template.get('USER_ID', '')),
+                'document_id': template.get('DOCUMENT_TYPE', ''),
+                'errors': [],
+                'last_activity': template.get('MODIFIED', template.get('CREATED', ''))
+            })
+        return logs
     
     for instance in instances:
         try:
