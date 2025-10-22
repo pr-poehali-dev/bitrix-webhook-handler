@@ -540,9 +540,17 @@ def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], sear
     response = requests.get(php_api_url, params=params, timeout=30)
     
     print(f"[DEBUG DB] Статус ответа PHP API: {response.status_code}")
+    print(f"[DEBUG DB] Content-Type: {response.headers.get('Content-Type', 'unknown')}")
+    print(f"[DEBUG DB] Сырой ответ (первые 1000 символов): {response.text[:1000]}")
     
     if response.status_code != 200:
         raise ValueError(f"PHP API вернул ошибку: {response.status_code}, текст: {response.text[:500]}")
+    
+    # Проверяем, что ответ - это JSON
+    if 'application/json' not in response.headers.get('Content-Type', ''):
+        print(f"[ERROR] PHP API вернул не JSON! Content-Type: {response.headers.get('Content-Type')}")
+        print(f"[ERROR] Полный ответ: {response.text}")
+        raise ValueError(f"PHP API вернул HTML вместо JSON. Проверь файл на сервере: {php_api_url}")
     
     data = response.json()
     

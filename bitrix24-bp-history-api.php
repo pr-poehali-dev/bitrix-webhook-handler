@@ -12,6 +12,7 @@
  * - offset: смещение (по умолчанию 0)
  * - status: фильтр по статусу (running, completed, error)
  * - search: поиск по названию
+ * - debug: режим отладки (показывает количество записей в таблицах)
  */
 
 // CORS для доступа из внешних приложений
@@ -25,11 +26,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Подключение к БД Битрикс24
+// Отключаем вывод HTML (чтобы не мешал JSON)
+define('NO_KEEP_STATISTIC', true);
+define('NOT_CHECK_PERMISSIONS', true);
+define('BX_NO_ACCELERATOR_RESET', true);
+
+// Подключение к БД Битрикс24 без проверки авторизации
+$_SERVER['REQUEST_METHOD'] = 'GET'; // Принудительно устанавливаем метод
 require_once($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_before.php');
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Loader;
 
 try {
     // Получаем параметры запроса
