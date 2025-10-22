@@ -94,7 +94,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     print(f"[INFO] Событие: {event_type}, Сделка ID: {deal_id}, Домен: {domain}")
     
-    if not deal_id or not client_endpoint:
+    if not deal_id:
         print(f"[WARN] Недостаточно данных для обработки события")
         return {
             'statusCode': 200,
@@ -103,30 +103,33 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
-    # Получаем полные данные сделки через REST API
-    rest_url = f"{client_endpoint}crm.deal.get.json"
-    params = urllib.parse.urlencode({
-        'ID': deal_id,
-        'auth': application_token
-    })
-    
-    try:
-        print(f"[INFO] Запрос к REST API: {rest_url}?{params[:100]}...")
+    # Используем входящий вебхук из секретов для REST API
+    webhook_url = os.environ.get('BITRIX24_WEBHOOK_URL', '')
+    if not webhook_url:
+        print(f"[ERROR] Секрет BITRIX24_WEBHOOK_URL не настроен!")
+        deal_full_data = {'error': 'BITRIX24_WEBHOOK_URL не настроен', 'deal_id': deal_id}
+    else:
+        # Получаем полные данные сделки через REST API
+        rest_url = f"{webhook_url}crm.deal.get.json"
+        params = urllib.parse.urlencode({'ID': deal_id})
         
-        req = urllib.request.Request(f"{rest_url}?{params}")
-        with urllib.request.urlopen(req, timeout=10) as response:
-            rest_data = json.loads(response.read().decode('utf-8'))
-        
-        if not rest_data.get('result'):
-            print(f"[WARN] REST API не вернул данные сделки: {rest_data}")
-            deal_full_data = {'error': 'Нет данных от REST API', 'raw': rest_data}
-        else:
-            deal_full_data = rest_data['result']
-            print(f"[INFO] Получены данные сделки: {json.dumps(deal_full_data, ensure_ascii=False)[:200]}...")
-        
-    except Exception as e:
-        print(f"[ERROR] Ошибка при запросе к REST API: {e}")
-        deal_full_data = {'error': str(e), 'deal_id': deal_id}
+        try:
+            print(f"[INFO] Запрос к REST API: {rest_url}?{params[:100]}...")
+            
+            req = urllib.request.Request(f"{rest_url}?{params}")
+            with urllib.request.urlopen(req, timeout=10) as response:
+                rest_data = json.loads(response.read().decode('utf-8'))
+            
+            if not rest_data.get('result'):
+                print(f"[WARN] REST API не вернул данные сделки: {rest_data}")
+                deal_full_data = {'error': 'Нет данных от REST API', 'raw': rest_data}
+            else:
+                deal_full_data = rest_data['result']
+                print(f"[INFO] Получены данные сделки: {json.dumps(deal_full_data, ensure_ascii=False)[:200]}...")
+            
+        except Exception as e:
+            print(f"[ERROR] Ошибка при запросе к REST API: {e}")
+            deal_full_data = {'error': str(e), 'deal_id': deal_id}
     
     # Сохраняем в БД
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
