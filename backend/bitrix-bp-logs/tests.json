@@ -1,0 +1,35 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS request для CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedHeaders": {
+        "Access-Control-Allow-Origin": "*"
+      }
+    },
+    {
+      "name": "GET логов через API",
+      "method": "GET",
+      "path": "/?source=api&limit=10",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "logs": "array",
+        "count": "number",
+        "limit": 10
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET с фильтром по статусу",
+      "method": "GET",
+      "path": "/?source=api&status=error",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "logs": "array"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

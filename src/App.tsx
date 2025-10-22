@@ -9,6 +9,7 @@ import InnUniqueness from "./pages/InnUniqueness";
 import Contracts from "./pages/Contracts";
 import Purchases from "./pages/Purchases";
 import UnfDocuments from "./pages/UnfDocuments";
+import BpLogs from "./pages/BpLogs";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/contracts" element={<Contracts />} />
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/unf-documents" element={<UnfDocuments />} />
+          <Route path="/bp-logs" element={<BpLogs />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

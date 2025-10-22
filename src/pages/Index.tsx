@@ -55,6 +55,14 @@ export default function Index() {
       path: '/unf-documents',
       color: 'bg-purple-500',
     },
+    {
+      id: 'bp-logs',
+      title: 'Логи бизнес-процессов',
+      description: 'Мониторинг и отслеживание ошибок БП',
+      icon: 'Activity',
+      path: '/bp-logs',
+      color: 'bg-red-500',
+    },
   ];
 
   useEffect(() => {
