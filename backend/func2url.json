@@ -1,4 +1,5 @@
 {
+  "bitrix-deal-tracker": "https://functions.poehali.dev/d26ee36d-e7d1-4b83-b45e-d1337f53bb19",
   "bitrix-test-handler": "https://functions.poehali.dev/7c260289-9d54-49dd-b0c9-8240b2e6f506",
   "bitrix-timeline-logs": "https://functions.poehali.dev/4cb6e52c-3777-4095-a59b-37d01e978ff6",
   "bitrix-bp-logs": "https://functions.poehali.dev/f6e71011-6a3a-4e15-b54b-774b4357063f",

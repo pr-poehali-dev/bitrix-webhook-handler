@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS для CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "POST с данными события Битрикс24",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "event": "ONCRMDEALUPDATE",
+        "event_handler_id": "475",
+        "ts": "1761151144",
+        "auth": {
+          "domain": "test.bitrix24.ru",
+          "client_endpoint": "https://test.bitrix24.ru/rest/",
+          "member_id": "test123",
+          "application_token": "testtoken"
+        },
+        "data": {
+          "FIELDS": {
+            "ID": "999"
+          }
+        }
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
