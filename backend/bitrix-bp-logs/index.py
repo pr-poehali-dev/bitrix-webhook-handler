@@ -546,13 +546,13 @@ def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], sear
     if response.status_code != 200:
         raise ValueError(f"PHP API вернул ошибку: {response.status_code}, текст: {response.text[:500]}")
     
-    # Проверяем, что ответ - это JSON
-    if 'application/json' not in response.headers.get('Content-Type', ''):
-        print(f"[ERROR] PHP API вернул не JSON! Content-Type: {response.headers.get('Content-Type')}")
-        print(f"[ERROR] Полный ответ: {response.text}")
-        raise ValueError(f"PHP API вернул HTML вместо JSON. Проверь файл на сервере: {php_api_url}")
-    
-    data = response.json()
+    # Пытаемся распарсить JSON (игнорируем Content-Type, т.к. Битрикс может его перезаписывать)
+    try:
+        data = response.json()
+    except Exception as e:
+        print(f"[ERROR] Не удалось распарсить JSON ответ: {e}")
+        print(f"[ERROR] Сырой ответ: {response.text[:500]}")
+        raise ValueError(f"PHP API вернул невалидный JSON: {e}")
     
     if not data.get('success', False):
         raise ValueError(f"PHP API вернул ошибку: {data.get('error', 'Неизвестная ошибка')}")
