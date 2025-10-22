@@ -420,11 +420,12 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     else:
         print(f"[DEBUG] Шаблон НЕ найден в словаре")
     
+    # Используем bizproc.workflow.instances для получения ВСЕХ экземпляров (включая завершённые)
     instances_response = requests.post(
-        f'{webhook_url}/bizproc.workflow.instance.list',
+        f'{webhook_url}/bizproc.workflow.instances',
         json={
-            'SELECT': ['ID', 'TEMPLATE_ID', 'DOCUMENT_ID', 'MODIFIED', 'STARTED', 'STARTED_BY', 'WORKFLOW_STATUS'],
-            'FILTER': {'TEMPLATE_ID': template_id}
+            'select': ['ID', 'TEMPLATE_ID', 'DOCUMENT_ID', 'MODIFIED', 'STARTED', 'STARTED_BY', 'WORKFLOW_STATUS'],
+            'filter': {'TEMPLATE_ID': template_id}
         },
         timeout=30
     )
@@ -434,9 +435,11 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     instances = []
     if instances_response.status_code == 200:
         instances_data = instances_response.json()
-        print(f"[DEBUG] Ответ API instance.list: {instances_data}")
+        print(f"[DEBUG] Ответ API instances: {instances_data}")
         instances = instances_data.get('result', [])
         print(f"[DEBUG] Получено экземпляров для шаблона {template_id}: {len(instances)}")
+    else:
+        print(f"[DEBUG] Ошибка запроса: {instances_response.status_code}, текст: {instances_response.text[:200]}")
     
     runs_by_user = {}
     runs_by_date = {}
