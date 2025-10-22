@@ -81,7 +81,9 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     # Получаем список шаблонов БП с полной информацией
     templates_response = requests.post(
         f'{webhook_url}/bizproc.workflow.template.list',
-        json={},
+        json={
+            'SELECT': ['ID', 'NAME', 'DESCRIPTION', 'MODIFIED', 'USER_ID', 'DOCUMENT_TYPE']
+        },
         timeout=30
     )
     templates_response.raise_for_status()
@@ -98,6 +100,7 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     if templates:
         first_template = list(templates.values())[0]
         print(f"[DEBUG] Пример шаблона: {first_template}")
+        print(f"[DEBUG] Ключи шаблона: {list(first_template.keys())}")
     
     logs = []
     
