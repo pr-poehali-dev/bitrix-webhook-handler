@@ -76,6 +76,7 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
         raise ValueError('BITRIX24_BP_WEBHOOK_URL не настроен')
     
     webhook_url = webhook_url.rstrip('/')
+    print(f"[DEBUG] Используем webhook: {webhook_url[:50]}...")
     
     # Получаем список шаблонов БП
     templates_response = requests.get(
@@ -85,18 +86,22 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     templates_response.raise_for_status()
     templates_data = templates_response.json()
     
+    print(f"[DEBUG] Получено шаблонов: {len(templates_data.get('result', []))}")
+    
     if 'result' not in templates_data:
         raise ValueError(f'Ошибка API получения шаблонов: {templates_data.get("error_description", "Неизвестная ошибка")}')
     
     templates = {t['ID']: t for t in templates_data.get('result', [])}
     logs = []
     
-    # Получаем список активных экземпляров БП через bizproc.workflow.instance.list
+    # Получаем список активных экземпляров БП через bizproc.workflow.instances
     instances_response = requests.get(
-        f'{webhook_url}/bizproc.workflow.instance.list',
-        params={'order': {'MODIFIED': 'DESC'}, 'filter': {}},
+        f'{webhook_url}/bizproc.workflow.instances',
         timeout=30
     )
+    
+    print(f"[DEBUG] Статус instances: {instances_response.status_code}")
+    print(f"[DEBUG] URL запроса: {webhook_url}/bizproc.workflow.instances")
     
     if instances_response.status_code != 200:
         # Если метод не работает, возвращаем информацию о шаблонах
@@ -118,6 +123,9 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     
     instances_data = instances_response.json()
     instances = instances_data.get('result', [])
+    
+    print(f"[DEBUG] Получено экземпляров БП: {len(instances)}")
+    print(f"[DEBUG] Ответ API: {instances_data}")
     
     for instance in instances:
         try:
