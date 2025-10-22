@@ -177,7 +177,7 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
             
             logs.append({
                 'id': f"template_{template_id}",
-                'name': f"[Шаблон] {template.get('NAME', 'Без названия')}",
+                'name': template.get('NAME', 'Без названия'),
                 'status': 'template',
                 'started': template.get('MODIFIED', template.get('CREATED', '')),
                 'user_id': str(template.get('USER_ID', '')),
