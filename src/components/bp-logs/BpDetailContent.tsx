@@ -38,32 +38,32 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
   }
 
   return (
-    <Card className="bg-slate-50 border-2 border-slate-200">
+    <Card className="bg-slate-800 border-2 border-slate-700">
       <CardContent className="pt-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-600">Шаблон</div>
-            <div className="text-base">{bpDetail.template_name || 'Неизвестно'}</div>
+            <div className="text-sm font-semibold text-slate-400">Шаблон</div>
+            <div className="text-base text-white">{bpDetail.template_name || 'Неизвестно'}</div>
           </div>
           <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-600">ID шаблона</div>
-            <div className="text-base font-mono">{bpDetail.template_id}</div>
+            <div className="text-sm font-semibold text-slate-400">ID шаблона</div>
+            <div className="text-base font-mono text-white">{bpDetail.template_id}</div>
           </div>
           <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-600">Запущен</div>
-            <div className="text-base">{formatDate(bpDetail.started)}</div>
+            <div className="text-sm font-semibold text-slate-400">Запущен</div>
+            <div className="text-base text-white">{formatDate(bpDetail.started)}</div>
           </div>
           <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-600">Изменён</div>
-            <div className="text-base">{formatDate(bpDetail.modified)}</div>
+            <div className="text-sm font-semibold text-slate-400">Изменён</div>
+            <div className="text-base text-white">{formatDate(bpDetail.modified)}</div>
           </div>
           <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-600">Запустил</div>
-            <div className="text-base">ID: {bpDetail.started_by}</div>
+            <div className="text-sm font-semibold text-slate-400">Запустил</div>
+            <div className="text-base text-white">ID: {bpDetail.started_by}</div>
           </div>
           <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-600">Документ</div>
-            <div className="text-base font-mono text-xs">
+            <div className="text-sm font-semibold text-slate-400">Документ</div>
+            <div className="text-base font-mono text-xs text-white">
               {Array.isArray(bpDetail.document_id) 
                 ? bpDetail.document_id.join(' / ') 
                 : bpDetail.document_id}
@@ -73,7 +73,7 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
 
         {bpDetail.stats && (
           <div className="space-y-4">
-            <h4 className="font-semibold text-lg flex items-center gap-2">
+            <h4 className="font-semibold text-lg flex items-center gap-2 text-white">
               <Icon name="BarChart3" size={18} />
               Статистика запусков
             </h4>
@@ -125,7 +125,7 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
 
             {bpDetail.stats.runs_by_user.length > 0 && (
               <div className="space-y-3">
-                <h5 className="font-semibold flex items-center gap-2">
+                <h5 className="font-semibold flex items-center gap-2 text-white">
                   <Icon name="Users" size={16} />
                   Статистика по пользователям
                 </h5>
@@ -156,7 +156,7 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
 
             {bpDetail.stats.recent_runs.length > 0 && (
               <div className="space-y-3">
-                <h5 className="font-semibold flex items-center gap-2">
+                <h5 className="font-semibold flex items-center gap-2 text-white">
                   <Icon name="Clock" size={16} />
                   Последние запуски
                 </h5>
@@ -185,7 +185,7 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
 
         {bpDetail.tasks && bpDetail.tasks.length > 0 && (
           <div className="space-y-3">
-            <h4 className="font-semibold text-lg flex items-center gap-2">
+            <h4 className="font-semibold text-lg flex items-center gap-2 text-white">
               <Icon name="ListChecks" size={18} />
               История задач ({bpDetail.tasks.length})
             </h4>
@@ -214,7 +214,7 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
 
         {bpDetail.history && bpDetail.history.length > 0 && (
           <div className="space-y-3">
-            <h4 className="font-semibold text-lg flex items-center gap-2">
+            <h4 className="font-semibold text-lg flex items-center gap-2 text-white">
               <Icon name="History" size={18} />
               История выполнения ({bpDetail.history.length})
             </h4>
