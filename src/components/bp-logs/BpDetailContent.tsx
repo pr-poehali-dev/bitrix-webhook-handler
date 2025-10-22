@@ -10,6 +10,8 @@ interface BpDetailContentProps {
 }
 
 const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
+  console.log('[BpDetailContent] Рендер с данными:', { bpDetail, loading });
+  
   if (loading) {
     return (
       <Card className="bg-slate-50">
@@ -23,6 +25,7 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
   }
 
   if (!bpDetail) {
+    console.log('[BpDetailContent] bpDetail пустой!');
     return (
       <Card className="bg-slate-50">
         <CardContent className="py-8">
