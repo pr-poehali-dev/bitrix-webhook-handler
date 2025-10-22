@@ -35,20 +35,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     params = event.get('queryStringParameters') or {}
     
     # Эндпоинт для детальной информации о БП
-    if '/detail' in path or params.get('id'):
+    if params.get('id'):
         bp_id = params.get('id')
-        if not bp_id:
-            return {
-                'statusCode': 400,
-                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'Параметр id обязателен'})
-            }
+        
+        print(f"[DEBUG] Запрос деталей для ID: {bp_id}")
         
         try:
             if bp_id.startswith('template_'):
+                print(f"[DEBUG] Это шаблон, загружаем статистику")
                 template_id = bp_id.replace('template_', '')
                 detail = get_template_stats(template_id)
             else:
+                print(f"[DEBUG] Это экземпляр БП, загружаем детали")
                 detail = get_bp_detail(bp_id)
             
             return {
@@ -57,6 +55,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'body': json.dumps(detail, ensure_ascii=False)
             }
         except Exception as e:
+            print(f"[ERROR] Ошибка получения деталей: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'statusCode': 500,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
