@@ -131,11 +131,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             print(f"[ERROR] Ошибка при запросе к REST API: {e}")
             deal_full_data = {'error': str(e), 'deal_id': deal_id}
     
-    # Получаем данные пользователя через REST API
+    # Получаем данные пользователя из deal_data или через REST API
     modifier_id = deal_full_data.get('MODIFY_BY_ID', '')
-    modifier_name = ''
+    modifier_name = deal_full_data.get('MODIFY_BY_NAME', '')  # Иногда Битрикс возвращает имя
     
-    if modifier_id and webhook_url:
+    # Если нет имени, пробуем загрузить через REST (может не работать для входящих вебхуков)
+    if modifier_id and not modifier_name and webhook_url:
         try:
             user_url = f"{webhook_url}user.get.json"
             user_params = urllib.parse.urlencode({'ID': modifier_id})
@@ -147,9 +148,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if user_data.get('result') and len(user_data['result']) > 0:
                 user = user_data['result'][0]
                 modifier_name = f"{user.get('NAME', '')} {user.get('LAST_NAME', '')}".strip()
-                print(f"[INFO] Пользователь: {modifier_name}")
+                print(f"[INFO] Пользователь получен: {modifier_name}")
         except Exception as e:
-            print(f"[WARN] Не удалось получить имя пользователя: {e}")
+            print(f"[WARN] Не удалось получить имя через API (ограничение прав вебхука): {e}")
+            # Формируем fallback из ID
+            if modifier_id:
+                modifier_name = f"Пользователь #{modifier_id}"
     
     # Находим предыдущее состояние для отслеживания изменений
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
