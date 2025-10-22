@@ -104,14 +104,17 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     
     logs = []
     
-    # Получаем список активных экземпляров БП через bizproc.workflow.instances
-    instances_response = requests.get(
-        f'{webhook_url}/bizproc.workflow.instances',
+    # Получаем список активных экземпляров БП через bizproc.workflow.instance.list
+    instances_response = requests.post(
+        f'{webhook_url}/bizproc.workflow.instance.list',
+        json={
+            'SELECT': ['ID', 'TEMPLATE_ID', 'DOCUMENT_ID', 'MODIFIED', 'STARTED', 'STARTED_BY', 'WORKFLOW_STATUS']
+        },
         timeout=30
     )
     
     print(f"[DEBUG] Статус instances: {instances_response.status_code}")
-    print(f"[DEBUG] URL запроса: {webhook_url}/bizproc.workflow.instances")
+    print(f"[DEBUG] URL запроса: {webhook_url}/bizproc.workflow.instance.list")
     
     if instances_response.status_code != 200:
         print(f"[DEBUG] Ошибка запроса instances: {instances_response.status_code}")
