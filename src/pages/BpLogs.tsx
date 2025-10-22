@@ -40,6 +40,37 @@ const BpLogs = () => {
   const BP_LOGS_URL = 'https://functions.poehali.dev/f6e71011-6a3a-4e15-b54b-774b4357063f';
   const TIMELINE_URL = 'https://functions.poehali.dev/4cb6e52c-3777-4095-a59b-37d01e978ff6';
 
+  const checkDbTables = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const params = new URLSearchParams({
+        source: 'db',
+        debug: '1'
+      });
+
+      const response = await fetch(`${BP_LOGS_URL}?${params}`);
+      const data = await response.json();
+
+      toast({
+        title: 'Debug: Таблицы БД',
+        description: JSON.stringify(data, null, 2),
+        duration: 10000,
+      });
+      
+      console.log('[DEBUG] Информация о таблицах:', data);
+    } catch (err: any) {
+      toast({
+        title: 'Ошибка Debug',
+        description: err.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchAllBps = async () => {
     setLoading(true);
     setError(null);
@@ -242,10 +273,16 @@ const BpLogs = () => {
             <h1 className="text-4xl font-bold text-slate-900">Мониторинг бизнес-процессов</h1>
             <p className="text-slate-600 mt-2">Отслеживание статусов, запущенных БП и логов Битрикс24</p>
           </div>
-          <Button onClick={() => window.location.href = '/'} variant="outline">
-            <Icon name="ArrowLeft" size={16} className="mr-2" />
-            На главную
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={checkDbTables} variant="secondary" disabled={loading}>
+              <Icon name="Database" size={16} className="mr-2" />
+              Debug БД
+            </Button>
+            <Button onClick={() => window.location.href = '/'} variant="outline">
+              <Icon name="ArrowLeft" size={16} className="mr-2" />
+              На главную
+            </Button>
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
