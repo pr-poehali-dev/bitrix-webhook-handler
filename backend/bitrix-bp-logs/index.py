@@ -498,91 +498,120 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     return result
 
 def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
+    """Получение истории БП из БД Битрикс24 (MySQL)"""
+    import pymysql
+    from pymysql.cursors import DictCursor
     
     db_config = {
         'host': os.environ.get('BITRIX24_DB_HOST'),
         'database': os.environ.get('BITRIX24_DB_NAME'),
         'user': os.environ.get('BITRIX24_DB_USER'),
         'password': os.environ.get('BITRIX24_DB_PASSWORD'),
-        'port': os.environ.get('BITRIX24_DB_PORT', '3306')
+        'port': int(os.environ.get('BITRIX24_DB_PORT', '3306')),
+        'charset': 'utf8mb4',
+        'cursorclass': DictCursor
     }
     
-    for key, value in db_config.items():
-        if not value:
-            raise ValueError(f'{key} не настроен в секретах')
+    for key in ['host', 'database', 'user', 'password']:
+        if not db_config.get(key):
+            raise ValueError(f'BITRIX24_DB_{key.upper()} не настроен в секретах')
     
-    conn = psycopg2.connect(**db_config)
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    conn = pymysql.connect(**db_config)
     
-    query = '''
-        SELECT 
-            wi.ID as id,
-            wt.NAME as name,
-            wi.STARTED as started,
-            wi.STARTED_BY as user_id,
-            wi.DOCUMENT_ID as document_id,
-            wi.WORKFLOW_STATE as workflow_state,
-            GROUP_CONCAT(
-                CASE WHEN t.EXECUTION_STATUS = 4 THEN t.NOTE ELSE NULL END 
-                SEPARATOR '|'
-            ) as errors,
-            MAX(t.MODIFIED) as last_activity
-        FROM b_bp_workflow_instance wi
-        LEFT JOIN b_bp_workflow_template wt ON wi.WORKFLOW_TEMPLATE_ID = wt.ID
-        LEFT JOIN b_bp_tracking t ON wi.ID = t.WORKFLOW_ID
-    '''
-    
-    conditions = []
-    params = []
-    
-    if search:
-        conditions.append("(wt.NAME LIKE %s OR wi.ID LIKE %s)")
-        search_pattern = f'%{search}%'
-        params.extend([search_pattern, search_pattern])
-    
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    
-    query += " GROUP BY wi.ID ORDER BY wi.STARTED DESC LIMIT %s OFFSET %s"
-    params.extend([limit, offset])
-    
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    
-    logs = []
-    for row in rows:
-        errors = row['errors'].split('|') if row['errors'] else []
-        errors = [e for e in errors if e]
-        
-        wf_state = str(row['workflow_state'] or '0')
-        if errors:
-            status = 'error'
-        elif wf_state in ['0', '1', '2']:
-            status = 'running'
-        elif wf_state == '3':
-            status = 'completed'
-        elif wf_state == '4':
-            status = 'terminated'
-        else:
-            status = 'unknown'
-        
-        if status_filter and status != status_filter:
-            continue
-        
-        logs.append({
-            'id': str(row['id']),
-            'name': row['name'] or 'Без названия',
-            'status': status,
-            'started': row['started'].isoformat() if row['started'] else '',
-            'user_id': str(row['user_id'] or ''),
-            'document_id': row['document_id'] or '',
-            'errors': errors,
-            'last_activity': row['last_activity'].isoformat() if row['last_activity'] else row['started'].isoformat() if row['started'] else ''
-        })
-    
-    cursor.close()
-    conn.close()
-    
-    return logs
+    try:
+        with conn.cursor() as cursor:
+            # Запрос к таблицам b_bp_workflow_instance (экземпляры БП) и b_bp_tracking (логи)
+            query = '''
+                SELECT 
+                    wi.ID as id,
+                    wt.NAME as name,
+                    wi.STARTED as started,
+                    wi.STARTED_BY as user_id,
+                    wi.DOCUMENT_ID as document_id,
+                    wi.MODIFIED as modified,
+                    wi.STATUS as status_code,
+                    GROUP_CONCAT(
+                        CONCAT(t.MODIFIED, '|', t.TYPE, '|', t.ACTION_NAME, '|', COALESCE(t.NOTE, ''))
+                        ORDER BY t.MODIFIED DESC
+                        SEPARATOR ';;;'
+                    ) as tracking_logs
+                FROM b_bp_workflow_instance wi
+                LEFT JOIN b_bp_workflow_template wt ON wi.WORKFLOW_TEMPLATE_ID = wt.ID
+                LEFT JOIN b_bp_tracking t ON wi.ID = t.WORKFLOW_ID
+            '''
+            
+            conditions = []
+            params = []
+            
+            if search:
+                conditions.append("(wt.NAME LIKE %s OR wi.ID LIKE %s)")
+                search_pattern = f'%{search}%'
+                params.extend([search_pattern, search_pattern])
+            
+            if status_filter:
+                # Статусы БП в Битрикс24: 1=running, 2=paused, 3=terminated, 4=completed
+                if status_filter == 'running':
+                    conditions.append("wi.STATUS IN (1, 2)")
+                elif status_filter == 'completed':
+                    conditions.append("wi.STATUS = 4")
+                elif status_filter == 'error':
+                    conditions.append("wi.STATUS = 3")
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            
+            query += " GROUP BY wi.ID ORDER BY wi.STARTED DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+            
+            print(f"[DEBUG DB] Выполняем запрос к БД с параметрами: limit={limit}, offset={offset}")
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            print(f"[DEBUG DB] Получено строк из БД: {len(rows)}")
+            
+            logs = []
+            for row in rows:
+                # Парсим логи трекинга
+                errors = []
+                tracking_logs = []
+                if row['tracking_logs']:
+                    for log_entry in row['tracking_logs'].split(';;;'):
+                        parts = log_entry.split('|')
+                        if len(parts) >= 4:
+                            log_time, log_type, action_name, action_note = parts
+                            tracking_logs.append({
+                                'time': log_time,
+                                'type': log_type,
+                                'action': action_name,
+                                'note': action_note
+                            })
+                            # Тип 6 = ошибка в b_bp_tracking
+                            if log_type == '6' and action_note:
+                                errors.append(f"{action_name}: {action_note}")
+                
+                # Определяем статус: 1=running, 2=paused, 3=terminated (error), 4=completed
+                status_code = row['status_code']
+                if errors or status_code == 3:
+                    status = 'error'
+                elif status_code in [1, 2]:
+                    status = 'running'
+                elif status_code == 4:
+                    status = 'completed'
+                else:
+                    status = 'unknown'
+                
+                logs.append({
+                    'id': str(row['id']),
+                    'name': row['name'] or 'Без названия',
+                    'status': status,
+                    'started': row['started'].isoformat() if row['started'] else '',
+                    'user_id': str(row['user_id'] or ''),
+                    'document_id': row['document_id'] or '',
+                    'errors': errors,
+                    'last_activity': row['modified'].isoformat() if row['modified'] else '',
+                    'tracking': tracking_logs[:10]  # Последние 10 записей трекинга
+                })
+            
+            return logs
+    finally:
+        conn.close()

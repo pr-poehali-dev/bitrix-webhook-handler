@@ -45,8 +45,9 @@ const BpLogs = () => {
     setError(null);
     
     try {
+      // Для "Все БП" ВСЕГДА используем БД (source=db), чтобы получить историю
       const params = new URLSearchParams({
-        source,
+        source: 'db',
         limit: '100',
         offset: '0',
         showAll: 'true'
