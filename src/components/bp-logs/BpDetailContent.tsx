@@ -191,15 +191,15 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
             </h4>
             <div className="space-y-2">
               {bpDetail.tasks.map((task) => (
-                <Card key={task.id} className="bg-white">
+                <Card key={task.id} className="bg-slate-700 border-slate-600">
                   <CardContent className="pt-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="font-medium">{task.name}</div>
-                        <div className="text-sm text-slate-600 mt-1">
+                        <div className="font-medium text-white">{task.name}</div>
+                        <div className="text-sm text-slate-300 mt-1">
                           ID: {task.id} • Пользователь: {task.user_id}
                         </div>
-                        <div className="text-xs text-slate-500 mt-1">
+                        <div className="text-xs text-slate-400 mt-1">
                           Изменено: {formatDate(task.modified)}
                         </div>
                       </div>
@@ -220,19 +220,19 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
             </h4>
             <div className="space-y-2">
               {bpDetail.history.map((item, idx) => (
-                <Card key={item.id || idx} className="bg-white border-l-4 border-blue-500">
+                <Card key={item.id || idx} className="bg-slate-700 border-slate-600 border-l-4 border-l-blue-500">
                   <CardContent className="pt-4">
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <div className="font-medium">{item.action_name || item.name}</div>
+                          <div className="font-medium text-white">{item.action_name || item.name}</div>
                           {item.note && (
-                            <div className="text-sm text-slate-700 mt-1 bg-slate-50 p-2 rounded">
+                            <div className="text-sm text-slate-300 mt-1 bg-slate-600 p-2 rounded">
                               {item.note}
                             </div>
                           )}
                         </div>
-                        <Badge variant="outline" className="shrink-0">
+                        <Badge variant="outline" className="shrink-0 text-white border-slate-500">
                           {item.execution_status === '0' && 'Успешно'}
                           {item.execution_status === '1' && 'Выполняется'}
                           {item.execution_status === '2' && 'Отменено'}
@@ -241,7 +241,7 @@ const BpDetailContent = ({ bpDetail, loading }: BpDetailContentProps) => {
                           {!item.execution_status && 'Статус неизвестен'}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                      <div className="flex items-center gap-4 text-xs text-slate-400">
                         <span className="flex items-center gap-1">
                           <Icon name="Clock" size={12} />
                           {formatDate(item.modified)}
