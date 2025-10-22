@@ -2,6 +2,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
+import base64
 from typing import Dict, Any
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -43,6 +44,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         content_type = headers.get('Content-Type', headers.get('content-type', ''))
         
         if 'application/x-www-form-urlencoded' in content_type:
+            # Декодируем base64 если нужно
+            if event.get('isBase64Encoded', False):
+                try:
+                    body_str = base64.b64decode(body_str).decode('utf-8')
+                    print(f"[DEBUG] Decoded from base64: {body_str[:200]}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to decode base64: {e}")
+            
             parsed = urllib.parse.parse_qs(body_str)
             body_data = {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
             
