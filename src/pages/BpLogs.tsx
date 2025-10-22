@@ -153,9 +153,9 @@ const BpLogs = () => {
             <h1 className="text-4xl font-bold text-slate-900">Мониторинг бизнес-процессов</h1>
             <p className="text-slate-600 mt-2">Отслеживание статусов и ошибок БП Битрикс24</p>
           </div>
-          <Button onClick={() => window.history.back()} variant="outline">
+          <Button onClick={() => window.location.href = '/'} variant="outline">
             <Icon name="ArrowLeft" size={16} className="mr-2" />
-            Назад
+            На главную
           </Button>
         </div>
 
