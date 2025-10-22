@@ -78,9 +78,10 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     webhook_url = webhook_url.rstrip('/')
     print(f"[DEBUG] Используем webhook: {webhook_url[:50]}...")
     
-    # Получаем список шаблонов БП
-    templates_response = requests.get(
+    # Получаем список шаблонов БП с полной информацией
+    templates_response = requests.post(
         f'{webhook_url}/bizproc.workflow.template.list',
+        json={},
         timeout=30
     )
     templates_response.raise_for_status()
@@ -92,6 +93,12 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
         raise ValueError(f'Ошибка API получения шаблонов: {templates_data.get("error_description", "Неизвестная ошибка")}')
     
     templates = {t['ID']: t for t in templates_data.get('result', [])}
+    
+    # Выводим первый шаблон для отладки
+    if templates:
+        first_template = list(templates.values())[0]
+        print(f"[DEBUG] Пример шаблона: {first_template}")
+    
     logs = []
     
     # Получаем список активных экземпляров БП через bizproc.workflow.instances
