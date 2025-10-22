@@ -74,12 +74,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     offset = int(params.get('offset', '0'))
     status_filter = params.get('status')
     search_query = params.get('search')
+    show_all = params.get('showAll', 'false').lower() == 'true'
     
     try:
         if source == 'db':
             logs = get_logs_from_db(limit, offset, status_filter, search_query)
         else:
-            logs = get_logs_from_api(limit, offset, status_filter, search_query)
+            logs = get_logs_from_api(limit, offset, status_filter, search_query, show_all)
         
         return {
             'statusCode': 200,
@@ -107,7 +108,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
         }
 
-def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:
+def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], search: Optional[str], show_all: bool = False) -> List[Dict[str, Any]]:
     webhook_url = os.environ.get('BITRIX24_BP_WEBHOOK_URL') or os.environ.get('BITRIX24_WEBHOOK_URL')
     if not webhook_url:
         raise ValueError('BITRIX24_BP_WEBHOOK_URL не настроен')
@@ -189,9 +190,9 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     else:
         print(f"[DEBUG] Instances пуст!")
     
-    # Если нет экземпляров, показываем шаблоны
-    if not instances:
-        print(f"[DEBUG] Экземпляров нет, возвращаем шаблоны")
+    # Если нет экземпляров или запрошены все БП (show_all=True), показываем шаблоны
+    if not instances or show_all:
+        print(f"[DEBUG] Экземпляров нет или show_all=True, добавляем шаблоны")
         print(f"[DEBUG] Ключи templates: {list(templates.keys())}")
         for template_id, template in list(templates.items())[:limit]:
             if search and search.lower() not in template.get('NAME', '').lower():
@@ -207,7 +208,10 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
                 'errors': [],
                 'last_activity': template.get('MODIFIED', template.get('CREATED', ''))
             })
-        return logs
+        
+        # Если show_all=False и шаблоны добавлены, сразу возвращаем
+        if not show_all:
+            return logs
     
     for instance in instances:
         try:

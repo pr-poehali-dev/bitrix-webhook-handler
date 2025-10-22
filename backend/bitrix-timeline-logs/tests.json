@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "name": "Get timeline logs",
+      "method": "GET",
+      "path": "/",
+      "queryParams": {
+        "limit": "10"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "logs": "array",
+        "count": "number"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Handle OPTIONS request",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}
