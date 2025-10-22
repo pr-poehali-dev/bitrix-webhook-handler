@@ -287,6 +287,35 @@ def get_bp_detail(bp_id: str) -> Dict[str, Any]:
     except:
         pass
     
+    # Получаем историю выполнения БП (логи действий)
+    history = []
+    try:
+        history_response = requests.post(
+            f'{webhook_url}/bizproc.workflow.instance.getHistory',
+            json={'ID': bp_id},
+            timeout=10
+        )
+        if history_response.status_code == 200:
+            history_data = history_response.json()
+            history_items = history_data.get('result', [])
+            
+            print(f"[DEBUG] История БП {bp_id}: получено {len(history_items)} записей")
+            
+            for item in history_items:
+                history.append({
+                    'id': item.get('ID', ''),
+                    'name': item.get('NAME', ''),
+                    'modified': item.get('MODIFIED', ''),
+                    'user_id': item.get('MODIFIED_BY', ''),
+                    'execution_status': item.get('EXECUTION_STATUS', ''),
+                    'execution_time': item.get('EXECUTION_TIME', ''),
+                    'note': item.get('NOTE', ''),
+                    'action': item.get('ACTION', ''),
+                    'action_name': item.get('ACTION_NAME', '')
+                })
+    except Exception as e:
+        print(f"[DEBUG] Ошибка получения истории: {e}")
+    
     return {
         'id': bp_id,
         'template_id': bp_info.get('TEMPLATE_ID', ''),
@@ -306,7 +335,8 @@ def get_bp_detail(bp_id: str) -> Dict[str, Any]:
                 'user_id': task.get('USER_ID', '')
             }
             for task in tasks
-        ]
+        ],
+        'history': history
     }
 
 def get_logs_from_db(limit: int, offset: int, status_filter: Optional[str], search: Optional[str]) -> List[Dict[str, Any]]:

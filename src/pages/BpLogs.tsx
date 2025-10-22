@@ -38,6 +38,17 @@ interface BpDetail {
     modified: string;
     user_id: string;
   }>;
+  history: Array<{
+    id: string;
+    name: string;
+    modified: string;
+    user_id: string;
+    execution_status: string;
+    execution_time: string;
+    note: string;
+    action: string;
+    action_name: string;
+  }>;
 }
 
 const BpLogs = () => {
@@ -421,6 +432,59 @@ const BpLogs = () => {
                                   </div>
                                 </div>
                                 {getStatusBadge(task.status)}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {bpDetail.history && bpDetail.history.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-lg flex items-center gap-2">
+                        <Icon name="History" size={18} />
+                        История выполнения ({bpDetail.history.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {bpDetail.history.map((item, idx) => (
+                          <Card key={item.id || idx} className="bg-slate-50 border-l-4 border-blue-500">
+                            <CardContent className="pt-4">
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <div className="font-medium">{item.action_name || item.name}</div>
+                                    {item.note && (
+                                      <div className="text-sm text-slate-700 mt-1 bg-white p-2 rounded">
+                                        {item.note}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Badge variant="outline" className="shrink-0">
+                                    {item.execution_status === '0' && 'Успешно'}
+                                    {item.execution_status === '1' && 'Выполняется'}
+                                    {item.execution_status === '2' && 'Отменено'}
+                                    {item.execution_status === '3' && 'Ошибка'}
+                                    {item.execution_status === '4' && 'Тайм-аут'}
+                                    {!item.execution_status && 'Статус неизвестен'}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs text-slate-500">
+                                  <span className="flex items-center gap-1">
+                                    <Icon name="Clock" size={12} />
+                                    {formatDate(item.modified)}
+                                  </span>
+                                  {item.execution_time && (
+                                    <span className="flex items-center gap-1">
+                                      <Icon name="Timer" size={12} />
+                                      {item.execution_time}с
+                                    </span>
+                                  )}
+                                  <span className="flex items-center gap-1">
+                                    <Icon name="User" size={12} />
+                                    ID: {item.user_id}
+                                  </span>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
