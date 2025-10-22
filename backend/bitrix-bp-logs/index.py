@@ -360,9 +360,11 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     )
     template_response.raise_for_status()
     template_data = template_response.json()
-    templates = template_data.get('result', {})
+    templates_list = template_data.get('result', [])
+    templates = {t['ID']: t for t in templates_list} if isinstance(templates_list, list) else templates_list
     
-    template_info = templates.get(template_id, {})
+    print(f"[DEBUG] Загружено шаблонов: {len(templates)}")
+    template_info = templates.get(str(template_id), {})
     
     instances_response = requests.post(
         f'{webhook_url}/bizproc.workflow.instance.list',
