@@ -429,10 +429,14 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
         timeout=30
     )
     
+    print(f"[DEBUG] Статус запроса instances для template_id={template_id}: {instances_response.status_code}")
+    
     instances = []
     if instances_response.status_code == 200:
         instances_data = instances_response.json()
+        print(f"[DEBUG] Ответ API instance.list: {instances_data}")
         instances = instances_data.get('result', [])
+        print(f"[DEBUG] Получено экземпляров для шаблона {template_id}: {len(instances)}")
     
     runs_by_user = {}
     runs_by_date = {}
