@@ -371,7 +371,11 @@ def get_template_stats(template_id: str) -> Dict[str, Any]:
     print(f"[DEBUG] Загружено шаблонов: {len(templates)}")
     print(f"[DEBUG] Ищем template_id='{template_id}' в ключах: {list(templates.keys())}")
     template_info = templates.get(str(template_id), {})
-    print(f"[DEBUG] Найдена информация о шаблоне: {bool(template_info)}, имя: {template_info.get('NAME', 'НЕ НАЙДЕНО')}")
+    if template_info:
+        print(f"[DEBUG] Шаблон найден! Ключи: {list(template_info.keys())}")
+        print(f"[DEBUG] Содержимое шаблона: {template_info}")
+    else:
+        print(f"[DEBUG] Шаблон НЕ найден в словаре")
     
     instances_response = requests.post(
         f'{webhook_url}/bizproc.workflow.instance.list',
