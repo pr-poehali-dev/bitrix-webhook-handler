@@ -173,10 +173,19 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
         return logs
     
     instances_data = instances_response.json()
+    
+    print(f"[DEBUG] Полный ответ API instances: {instances_data}")
+    
+    if 'error' in instances_data:
+        print(f"[DEBUG] Ошибка API: {instances_data.get('error_description', 'Неизвестная ошибка')}")
+    
     instances = instances_data.get('result', [])
     
     print(f"[DEBUG] Получено экземпляров БП: {len(instances)}")
-    print(f"[DEBUG] Instances: {instances}")
+    if instances:
+        print(f"[DEBUG] Первый instance: {instances[0]}")
+    else:
+        print(f"[DEBUG] Instances пуст!")
     
     # Если нет экземпляров, показываем шаблоны
     if not instances:
