@@ -77,68 +77,89 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
     
     webhook_url = webhook_url.rstrip('/')
     
-    # Получаем список экземпляров БП
-    response = requests.post(
-        f'{webhook_url}/bizproc.workflow.instances',
-        json={
-            'select': ['ID', 'WORKFLOW_TEMPLATE_NAME', 'STARTED', 'STARTED_BY', 'DOCUMENT_ID', 'WORKFLOW_STATE'],
-            'order': {'STARTED': 'DESC'},
-            'filter': {}
-        },
+    # Получаем список шаблонов БП
+    templates_response = requests.get(
+        f'{webhook_url}/bizproc.workflow.template.list',
         timeout=30
     )
-    response.raise_for_status()
-    data = response.json()
+    templates_response.raise_for_status()
+    templates_data = templates_response.json()
     
-    if 'result' not in data:
-        raise ValueError(f'Ошибка API: {data.get("error_description", "Неизвестная ошибка")}')
+    if 'result' not in templates_data:
+        raise ValueError(f'Ошибка API получения шаблонов: {templates_data.get("error_description", "Неизвестная ошибка")}')
     
-    workflows = data['result']
+    templates = {t['ID']: t for t in templates_data.get('result', [])}
     logs = []
     
-    for wf in workflows:
-        # Получаем детальные логи для каждого процесса
+    # Получаем список активных экземпляров БП через bizproc.workflow.instance.list
+    instances_response = requests.get(
+        f'{webhook_url}/bizproc.workflow.instance.list',
+        params={'order': {'MODIFIED': 'DESC'}, 'filter': {}},
+        timeout=30
+    )
+    
+    if instances_response.status_code != 200:
+        # Если метод не работает, возвращаем информацию о шаблонах
+        for template_id, template in list(templates.items())[:limit]:
+            if search and search.lower() not in template.get('NAME', '').lower():
+                continue
+            
+            logs.append({
+                'id': template_id,
+                'name': template.get('NAME', 'Без названия'),
+                'status': 'unknown',
+                'started': template.get('MODIFIED', ''),
+                'user_id': template.get('USER_ID', ''),
+                'document_id': '',
+                'errors': [],
+                'last_activity': template.get('MODIFIED', '')
+            })
+        return logs
+    
+    instances_data = instances_response.json()
+    instances = instances_data.get('result', [])
+    
+    for instance in instances:
         try:
-            log_response = requests.post(
-                f'{webhook_url}/bizproc.activity.log.get',
-                json={'ID': wf['ID']},
-                timeout=10
-            )
-            log_data = log_response.json()
+            template_name = templates.get(instance.get('TEMPLATE_ID'), {}).get('NAME', 'Без названия')
             
+            # Пытаемся получить детальные логи
             errors = []
-            last_activity = None
-            
-            if 'result' in log_data and log_data['result']:
-                activities = log_data['result']
-                for activity in activities:
-                    if activity.get('STATUS') == 'error':
-                        errors.append(activity.get('NOTE', 'Неизвестная ошибка'))
-                    if not last_activity or activity.get('MODIFIED', '') > last_activity:
-                        last_activity = activity.get('MODIFIED')
+            try:
+                log_response = requests.get(
+                    f'{webhook_url}/bizproc.workflow.instance.get',
+                    params={'ID': instance['ID']},
+                    timeout=5
+                )
+                if log_response.status_code == 200:
+                    detail_data = log_response.json()
+                    if 'error' in detail_data:
+                        errors.append(detail_data.get('error_description', 'Неизвестная ошибка'))
+            except:
+                pass
             
             # Определяем статус
-            wf_state = str(wf.get('WORKFLOW_STATE', '0'))
-            if errors:
+            workflow_status = instance.get('STATUS', 0)
+            if errors or workflow_status == 3:
                 status = 'error'
-            elif wf_state in ['0', '1', '2']:
+            elif workflow_status in [0, 1]:
                 status = 'running'
-            elif wf_state == '3':
+            elif workflow_status == 2:
                 status = 'completed'
-            elif wf_state == '4':
+            elif workflow_status == 4:
                 status = 'terminated'
             else:
                 status = 'unknown'
             
             log_entry = {
-                'id': wf['ID'],
-                'name': wf.get('WORKFLOW_TEMPLATE_NAME', 'Без названия'),
+                'id': instance['ID'],
+                'name': instance.get('WORKFLOW_TEMPLATE_NAME') or template_name,
                 'status': status,
-                'started': wf.get('STARTED', ''),
-                'user_id': wf.get('STARTED_BY', ''),
-                'document_id': wf.get('DOCUMENT_ID', []),
+                'started': instance.get('STARTED', ''),
+                'user_id': str(instance.get('STARTED_BY', '')),
+                'document_id': instance.get('DOCUMENT_ID', ''),
                 'errors': errors,
-                'last_activity': last_activity or wf.get('STARTED', '')
+                'last_activity': instance.get('MODIFIED', instance.get('STARTED', ''))
             }
             
             if status_filter and status != status_filter:
@@ -152,8 +173,11 @@ def get_logs_from_api(limit: int, offset: int, status_filter: Optional[str], sea
             
             logs.append(log_entry)
             
+            if len(logs) >= limit:
+                break
+                
         except Exception as e:
-            print(f"Ошибка получения логов для {wf['ID']}: {e}")
+            print(f"Ошибка обработки экземпляра {instance.get('ID')}: {e}")
             continue
     
     return logs[offset:offset + limit]
