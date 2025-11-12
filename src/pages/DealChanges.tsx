@@ -27,9 +27,25 @@ interface DealChange {
   changes_summary?: any;
 }
 
+interface RollbackLog {
+  id: number;
+  deal_id: string;
+  action_type: string;
+  change_id?: number;
+  previous_stage?: string;
+  new_stage: string;
+  deal_snapshot?: any;
+  performed_at: string;
+  performed_by: string;
+  reason: string;
+  success: boolean;
+  error_message?: string;
+}
+
 const BACKEND_URL = 'https://functions.poehali.dev/fa7ea1c4-cbac-4964-b75e-c5b527e353c7';
 const ENRICH_URL = 'https://functions.poehali.dev/b597a185-9519-4098-92d3-670edaa7daac';
 const ROLLBACK_URL = 'https://functions.poehali.dev/61454b6b-601a-40b6-81e2-b0a8bc5da4d7';
+const HISTORY_URL = 'https://functions.poehali.dev/96c3dff1-6a64-4e7b-b6a2-c268cd73c842';
 
 const STAGE_NAMES: Record<string, string> = {
   'NEW': 'Новая',
@@ -47,6 +63,9 @@ export default function DealChanges() {
   const [enriching, setEnriching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [historyDealId, setHistoryDealId] = useState<string | null>(null);
+  const [historyLogs, setHistoryLogs] = useState<RollbackLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchChanges = async () => {
@@ -149,6 +168,32 @@ export default function DealChanges() {
 
   const hasError = (change: DealChange) => {
     return change.deal_data?.error || (!change.current_stage && change.previous_stage);
+  };
+
+  const fetchDealHistory = async (dealId: string) => {
+    setHistoryDealId(dealId);
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`${HISTORY_URL}?deal_id=${dealId}&limit=50`);
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки истории');
+      }
+      const data = await response.json();
+      setHistoryLogs(data.logs || []);
+    } catch (err: any) {
+      toast({
+        title: 'Ошибка',
+        description: err.message || 'Не удалось загрузить историю действий',
+        variant: 'destructive',
+      });
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const closeHistory = () => {
+    setHistoryDealId(null);
+    setHistoryLogs([]);
   };
 
   useEffect(() => {
@@ -372,18 +417,26 @@ export default function DealChanges() {
                             {formatDate(change.timestamp_received)}
                           </TableCell>
                           <TableCell>
-                            {change.previous_stage && !isError ? (
+                            <div className="flex gap-1">
+                              {change.previous_stage && !isError && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => rollbackDeal(change.deal_id, change.previous_stage!)}
+                                >
+                                  <Icon name="Undo2" size={14} className="mr-1" />
+                                  Откатить
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
-                                variant="outline"
-                                onClick={() => rollbackDeal(change.deal_id, change.previous_stage!)}
+                                variant="ghost"
+                                onClick={() => fetchDealHistory(change.deal_id)}
                               >
-                                <Icon name="Undo2" size={14} className="mr-1" />
-                                Откатить
+                                <Icon name="History" size={14} className="mr-1" />
+                                История
                               </Button>
-                            ) : (
-                              <span className="text-slate-400 text-xs">—</span>
-                            )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -394,6 +447,86 @@ export default function DealChanges() {
             )}
           </CardContent>
         </Card>
+
+        {historyDealId && (
+          <Card className="border-2 border-blue-200">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>История действий для сделки #{historyDealId}</CardTitle>
+                <Button variant="ghost" size="sm" onClick={closeHistory}>
+                  <Icon name="X" size={16} />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Icon name="Loader2" size={32} className="animate-spin text-slate-400" />
+                </div>
+              ) : historyLogs.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <Icon name="FileText" size={48} className="mx-auto mb-2 text-slate-300" />
+                  <p>Нет истории действий для этой сделки</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">ID</TableHead>
+                      <TableHead className="w-32">Тип</TableHead>
+                      <TableHead className="w-40">Изменение</TableHead>
+                      <TableHead className="w-32">Кто</TableHead>
+                      <TableHead>Причина</TableHead>
+                      <TableHead className="w-32">Статус</TableHead>
+                      <TableHead className="w-44">Время</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyLogs.map((log) => (
+                      <TableRow key={log.id} className={!log.success ? 'bg-red-50' : ''}>
+                        <TableCell className="font-mono text-xs">{log.id}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {log.action_type === 'rollback' ? 'Откат' : log.action_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {log.previous_stage && log.new_stage ? (
+                            <div className="flex items-center gap-1 text-xs">
+                              {getStageBadge(log.previous_stage)}
+                              <Icon name="ArrowRight" size={12} />
+                              {getStageBadge(log.new_stage)}
+                            </div>
+                          ) : (
+                            <span className="text-xs">→ {getStageBadge(log.new_stage)}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">{log.performed_by}</TableCell>
+                        <TableCell className="text-xs text-slate-600">{log.reason}</TableCell>
+                        <TableCell>
+                          {log.success ? (
+                            <Badge variant="default" className="bg-green-500">
+                              <Icon name="CheckCircle" size={12} className="mr-1" />
+                              Успешно
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive">
+                              <Icon name="XCircle" size={12} className="mr-1" />
+                              Ошибка
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600">
+                          {formatDate(log.performed_at)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
