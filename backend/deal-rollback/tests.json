@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "Rollback deal to previous stage",
+      "method": "POST",
+      "body": {
+        "deal_id": "223",
+        "target_stage_id": "C2:EXECUTING"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "deal_id": "string",
+        "new_stage": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

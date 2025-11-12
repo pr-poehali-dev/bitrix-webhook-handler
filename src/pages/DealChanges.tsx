@@ -29,6 +29,7 @@ interface DealChange {
 
 const BACKEND_URL = 'https://functions.poehali.dev/fa7ea1c4-cbac-4964-b75e-c5b527e353c7';
 const ENRICH_URL = 'https://functions.poehali.dev/b597a185-9519-4098-92d3-670edaa7daac';
+const ROLLBACK_URL = 'https://functions.poehali.dev/61454b6b-601a-40b6-81e2-b0a8bc5da4d7';
 
 const STAGE_NAMES: Record<string, string> = {
   'NEW': 'Новая',
@@ -107,6 +108,47 @@ export default function DealChanges() {
     } finally {
       setEnriching(false);
     }
+  };
+
+  const rollbackDeal = async (dealId: string, targetStage: string) => {
+    if (!confirm(`Откатить сделку #${dealId} на стадию ${STAGE_NAMES[targetStage] || targetStage}?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(ROLLBACK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deal_id: dealId,
+          target_stage_id: targetStage,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: 'Готово!',
+          description: data.message,
+        });
+        fetchChanges();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Ошибка отката',
+        description: err.message || 'Не удалось откатить сделку',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const hasError = (change: DealChange) => {
+    return change.deal_data?.error || (!change.current_stage && change.previous_stage);
   };
 
   useEffect(() => {
@@ -281,17 +323,32 @@ export default function DealChanges() {
                       <TableHead className="w-40">Пользователь</TableHead>
                       <TableHead className="w-28">Сумма</TableHead>
                       <TableHead className="w-44">Время изменения</TableHead>
+                      <TableHead className="w-32">Действия</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredChanges.map((change) => {
                       const dealData = change.deal_data || {};
+                      const isError = hasError(change);
                       return (
-                        <TableRow key={change.id}>
+                        <TableRow key={change.id} className={isError ? 'bg-red-50' : ''}>
                           <TableCell className="font-mono text-xs">{change.id}</TableCell>
-                          <TableCell className="font-semibold">#{change.deal_id}</TableCell>
+                          <TableCell className="font-semibold">
+                            <div className="flex items-center gap-2">
+                              #{change.deal_id}
+                              {isError && (
+                                <Icon name="AlertCircle" size={14} className="text-red-500" />
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="max-w-xs truncate">
-                            {dealData.TITLE || '—'}
+                            {isError ? (
+                              <div className="text-red-600 text-sm">
+                                <strong>Ошибка:</strong> {dealData.error || 'Некорректные данные'}
+                              </div>
+                            ) : (
+                              dealData.TITLE || '—'
+                            )}
                           </TableCell>
                           <TableCell>
                             {renderChangeSummary(change)}
@@ -313,6 +370,20 @@ export default function DealChanges() {
                           </TableCell>
                           <TableCell className="text-xs text-slate-600">
                             {formatDate(change.timestamp_received)}
+                          </TableCell>
+                          <TableCell>
+                            {change.previous_stage && !isError ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => rollbackDeal(change.deal_id, change.previous_stage!)}
+                              >
+                                <Icon name="Undo2" size={14} className="mr-1" />
+                                Откатить
+                              </Button>
+                            ) : (
+                              <span className="text-slate-400 text-xs">—</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
