@@ -17,20 +17,27 @@ export default function WebhookTest() {
     
     try {
       const testData = {
-        bitrix_id: '999',
-        test: true
+        bitrix_id: '114',
+        test: true,
+        auth: 'mzaa1j1d6pbzszbeu6g2awhv59v4hy2z'
       };
       
       const response = await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'User-Agent': 'TestClient/1.0'
         },
         body: JSON.stringify(testData),
       });
       
       const data = await response.json();
-      setResult({ status: response.status, data });
+      setResult({ 
+        status: response.status, 
+        data,
+        sent: testData,
+        timestamp: new Date().toISOString()
+      });
       
       if (response.ok) {
         toast({
