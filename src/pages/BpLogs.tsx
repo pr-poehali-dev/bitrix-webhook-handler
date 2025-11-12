@@ -71,6 +71,42 @@ const BpLogs = () => {
     }
   };
 
+  const testDirectApi = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const params = new URLSearchParams({
+        source: 'api',
+        showAll: 'true',
+        limit: '5'
+      });
+
+      const response = await fetch(`${BP_LOGS_URL}?${params}`);
+      const data = await response.json();
+
+      console.log('[TEST API] Прямой ответ от REST API:', data);
+      
+      const message = data.logs && data.logs.length > 0
+        ? `Найдено БП: ${data.count}. Первый: ${data.logs[0].name}`
+        : `БП не найдены. Ответ: ${JSON.stringify(data)}`;
+
+      toast({
+        title: 'Тест REST API Битрикс24',
+        description: message,
+        duration: 10000,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Ошибка теста API',
+        description: err.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchAllBps = async () => {
     setLoading(true);
     setError(null);
@@ -274,6 +310,10 @@ const BpLogs = () => {
             <p className="text-slate-600 mt-2">Отслеживание статусов, запущенных БП и логов Битрикс24</p>
           </div>
           <div className="flex gap-2">
+            <Button onClick={testDirectApi} variant="default" disabled={loading}>
+              <Icon name="Zap" size={16} className="mr-2" />
+              Тест API
+            </Button>
             <Button onClick={checkDbTables} variant="secondary" disabled={loading}>
               <Icon name="Database" size={16} className="mr-2" />
               Debug БД
