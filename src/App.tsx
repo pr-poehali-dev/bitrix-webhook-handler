@@ -11,6 +11,7 @@ import Purchases from "./pages/Purchases";
 import UnfDocuments from "./pages/UnfDocuments";
 import BpLogs from "./pages/BpLogs";
 import DealChanges from "./pages/DealChanges";
+import WebhookTest from "./pages/WebhookTest";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/unf-documents" element={<UnfDocuments />} />
           <Route path="/bp-logs" element={<BpLogs />} />
           <Route path="/deal-changes" element={<DealChanges />} />
+          <Route path="/webhook-test" element={<WebhookTest />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
